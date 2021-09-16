@@ -1,5 +1,9 @@
 package bitcoin
 
+import bitcoin.messages.MessageHeader
+import bitcoin.messages.VersionMessage
+import bitcoin.messages.components.NetworkAddress
+import bitcoin.messages.components.VariableString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -9,6 +13,8 @@ import java.io.OutputStream
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.security.MessageDigest
+import java.time.ZonedDateTime
+import kotlin.random.Random
 
 class Connection(
     val seed: String,
@@ -17,6 +23,7 @@ class Connection(
     disconnectionCallback: (connection: Connection) -> Unit,
 ) {
     val protocolVersion = 70015                                                             //https://developer.bitcoin.org/reference/p2p_networking.html#protocol-versions
+    val servicesBitFlag = 1L                                                                //https://en.bitcoin.it/wiki/Protocol_documentation
     val sha256Hasher = MessageDigest.getInstance("SHA-256")
 
     private var _isReady = false
@@ -72,10 +79,15 @@ class Connection(
 
     private fun headerChecksumIsValid(checksum: Int, payload: ByteArray): Boolean {
         synchronized(sha256Hasher) {
-            val actualHash = sha256Hasher.digest(sha256Hasher.digest(payload))
-            val computedHash = ByteBuffer.allocate(4).get(actualHash, 0, 4).int
+            val computedHash = calculateHeaderChecksum(payload)
             return checksum == computedHash
         }
+    }
+
+    private fun calculateHeaderChecksum(payload: ByteArray): Int {
+        val actualHash = sha256Hasher.digest(sha256Hasher.digest(payload))
+        val computedHash = ByteBuffer.allocate(4).get(actualHash, 0, 4).int
+        return computedHash
     }
 
     private fun processIncomingMessage(header: MessageHeader, payload: ByteArray) {
@@ -118,51 +130,35 @@ class Connection(
     }
 
     private fun sendVersionMessage() {
+        val message = VersionMessage(
+            protocolVersion = protocolVersion,
+            services = servicesBitFlag,
+            timestamp = ZonedDateTime.now().toEpochSecond(),
+            targetAddress = NetworkAddress(seed),
+            sourceAddress = NetworkAddress("0.0.0.0"),
+            nonce = Random.nextLong(),
+            userAgent = VariableString(""),
+            startHeight = BlockDb.instance.lastBlock,
+            relay = true
+        )
+
+        val messageByteArray = message.toByteArray()
+        val messageChecksum = calculateHeaderChecksum(messageByteArray)
+
         val header = MessageHeader(
             messageHeaderStart,
             "version",
-            payloadLength,
-            checksum
+            messageByteArray.size,
+            messageChecksum
         )
-        outputStream.write(header.toByteBuffer().array())
-        outputStream.write(payload)
+        outputStream.write(header.toByteArray())
+        outputStream.write(messageByteArray)
+        outputStream.flush()
     }
 
     companion object {
         const val messageHeaderStart = 0x0b110907                                                       //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
         val messageHeaderStartBytes = ByteBuffer.allocate(4).putInt(messageHeaderStart)   //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
         const val messageHeaderSize = 4 + 12 + 4 + 4                                                    //https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
-    }
-
-    private data class MessageHeader(
-        val magic: Int,
-        val command: String,
-        val payloadLength: Int,
-        val checksum: Int
-    ) {
-        fun toByteBuffer(): ByteArray {
-            val commandArray = command.toByteArray()
-            val array = ByteArray(messageHeaderSize)
-            ByteBuffer.allocate(4).putInt(magic).array().copyInto(array)
-            commandArray.copyInto(array, 4)
-            for (i in commandArray.size..12) {
-                commandArray[4+i] = 0
-            }
-
-            return buffer
-                .putInt(payloadLength)
-                .putInt(checksum)
-        }
-
-        companion object {
-            fun fromByteArray(buffer: ByteArray): MessageHeader {
-                return MessageHeader(   //https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
-                    ByteBuffer.allocate(4).put(buffer.slice(0 until 4).toByteArray()).int,
-                    ByteBuffer.allocate(12).put(buffer.slice(4 until 16).toByteArray()).toString(),
-                    ByteBuffer.allocate(4).put(buffer.slice(16 until 20).toByteArray()).int,
-                    ByteBuffer.allocate(4).put(buffer.slice(20 until 24).toByteArray()).int,
-                )
-            }
-        }
     }
 }
