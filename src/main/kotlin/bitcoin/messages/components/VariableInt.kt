@@ -1,6 +1,7 @@
 package bitcoin.messages.components
 
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 data class VariableInt(
     val value: Long
@@ -13,21 +14,21 @@ data class VariableInt(
             }
             3 -> {
                 dest[destIndex] = (0xFD).toByte()
-                ByteBuffer.allocate(2).putShort(value.toShort()).array().copyInto(dest, destIndex + 1)
+                ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(value.toShort()).array().copyInto(dest, destIndex + 1)
             }
             5 -> {
                 dest[destIndex] = (0xFE).toByte()
-                ByteBuffer.allocate(4).putInt(value.toInt()).array().copyInto(dest, destIndex + 1)
+                ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value.toInt()).array().copyInto(dest, destIndex + 1)
             }
             9 -> {
                 dest[destIndex] = (0xFF).toByte()
-                ByteBuffer.allocate(8).putLong(value).array().copyInto(dest, destIndex + 1)
+                ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array().copyInto(dest, destIndex + 1)
             }
             else -> {
                 throw Exception("Invalid size")
             }
         }
-        return messageSize
+        return destIndex + messageSize
     }
 
     fun calculateMessageSize(): Int {
@@ -47,13 +48,13 @@ data class VariableInt(
             val leadingByte = buffer[startIndex]
             val value = when (leadingByte.toInt()) {
                 0xFD -> {
-                    ByteBuffer.allocate(2).put(buffer.slice(startIndex until startIndex + 2).toByteArray()).long
+                    ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 2).toByteArray()).long
                 }
                 0xFE -> {
-                    ByteBuffer.allocate(4).put(buffer.slice(startIndex until startIndex + 4).toByteArray()).long
+                    ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 4).toByteArray()).long
                 }
                 0xFF -> {
-                    ByteBuffer.allocate(8).put(buffer.slice(startIndex until startIndex + 8).toByteArray()).long
+                    ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 8).toByteArray()).long
                 }
                 else -> {
                     leadingByte.toLong()

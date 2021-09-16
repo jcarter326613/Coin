@@ -10,20 +10,21 @@ import kotlinx.coroutines.launch
 import util.Log
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.Inet6Address
 import java.net.Socket
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.time.ZonedDateTime
 import kotlin.random.Random
 
 class Connection(
     val seed: String,
-    val port: Int,
+    val port: Short,
     messageCallback: (message: String, connection: Connection) -> Unit,
     disconnectionCallback: (connection: Connection) -> Unit,
 ) {
     val protocolVersion = 70015                                                             //https://developer.bitcoin.org/reference/p2p_networking.html#protocol-versions
-    val servicesBitFlag = 1L                                                                //https://en.bitcoin.it/wiki/Protocol_documentation
     val sha256Hasher = MessageDigest.getInstance("SHA-256")
 
     private var _isReady = false
@@ -36,9 +37,10 @@ class Connection(
     lateinit var outputStream: OutputStream
 
     init {
+        Log.info("Connecting to $seed:$port")
         GlobalScope.launch(Dispatchers.IO) {
             try {
-                socket = Socket(seed, port)
+                socket = Socket(seed, port.toInt())
                 inputStream = socket.getInputStream()
                 outputStream = socket.getOutputStream()
 
@@ -86,7 +88,7 @@ class Connection(
 
     private fun calculateHeaderChecksum(payload: ByteArray): Int {
         val actualHash = sha256Hasher.digest(sha256Hasher.digest(payload))
-        val computedHash = ByteBuffer.allocate(4).get(actualHash, 0, 4).int
+        val computedHash = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).get(actualHash, 0, 4).position(0).int
         return computedHash
     }
 
@@ -134,8 +136,8 @@ class Connection(
             protocolVersion = protocolVersion,
             services = servicesBitFlag,
             timestamp = ZonedDateTime.now().toEpochSecond(),
-            targetAddress = NetworkAddress(seed),
-            sourceAddress = NetworkAddress("0.0.0.0"),
+            targetAddress = NetworkAddress(convertAddressToByteArray(seed), port),
+            sourceAddress = NetworkAddress(convertAddressToByteArray("0.0.0.0"), port),
             nonce = Random.nextLong(),
             userAgent = VariableString(""),
             startHeight = BlockDb.instance.lastBlock,
@@ -151,14 +153,39 @@ class Connection(
             messageByteArray.size,
             messageChecksum
         )
-        outputStream.write(header.toByteArray())
+        val headerByteArray = header.toByteArray()
+        Log.info("Version message header")
+        Log.info(headerByteArray)
+        Log.info("Version message payload")
+        Log.info(messageByteArray)
+        outputStream.write(headerByteArray)
         outputStream.write(messageByteArray)
         outputStream.flush()
     }
 
+    private fun convertAddressToByteArray(a: String): ByteArray {
+        //Inet6Address.getAllByName(seed)  gets all the addresses.  We just want the first one for now.
+        val address = Inet6Address.getByName(a).address
+        if (address.size == 4) {
+            val lengthenedAddress = ByteArray(16)
+            for ( i in 0..9) {
+                lengthenedAddress[0] = 0
+            }
+            lengthenedAddress[10] = 0xFF.toByte()
+            lengthenedAddress[11] = 0xFF.toByte()
+            lengthenedAddress[12] = address[0]
+            lengthenedAddress[13] = address[1]
+            lengthenedAddress[14] = address[2]
+            lengthenedAddress[15] = address[3]
+            return lengthenedAddress
+        }
+        return address
+    }
+
     companion object {
         const val messageHeaderStart = 0x0b110907                                                       //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
-        val messageHeaderStartBytes = ByteBuffer.allocate(4).putInt(messageHeaderStart)   //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
+        val messageHeaderStartBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(messageHeaderStart)   //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
         const val messageHeaderSize = 4 + 12 + 4 + 4                                                    //https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
+        const val servicesBitFlag = 1L                                                                //https://en.bitcoin.it/wiki/Protocol_documentation
     }
 }

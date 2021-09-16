@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 
 class Network {
-    val port = 18333                                                                        //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
+    val port: Short = 18333                                                                 //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
 
     private val defaultSeedAddresses = listOf(                                              //https://github.com/bitcoin/bitcoin/blob/master/src/chainparams.cpp#L233
         "testnet-seed.bitcoin.jonasschnelli.ch",
@@ -26,7 +26,7 @@ class Network {
     }
 
     private fun establishSeedConnection(seed: String) {
-        val newConnection = Connection(seed, {message, connection -> receiveMessage(message, connection)}, {connectionDisconnected(it)} )
+        val newConnection = Connection(seed, port, {message, connection -> receiveMessage(message, connection)}, {connectionDisconnected(it)} )
         activeConnections.add(newConnection)
     }
 

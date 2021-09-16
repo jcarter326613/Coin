@@ -6,7 +6,10 @@ data class VariableString (
     val s: String
 ) {
     fun intoByteArray(dest: ByteArray, destIndex: Int): Int {
-
+        val length = VariableInt(s.length.toLong())
+        val nextIndex = length.intoByteArray(dest, destIndex)
+        s.toByteArray().copyInto(dest, nextIndex)
+        return nextIndex + s.length
     }
 
     fun calculateMessageSize(): Int = VariableInt(s.length.toLong()).calculateMessageSize() + s.length
