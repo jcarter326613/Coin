@@ -27,8 +27,8 @@ data class VersionMessage(
         currentOffset += 8
         ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(timestamp).array().copyInto(array, 12)
         currentOffset += 8
-        currentOffset = targetAddress.intoByteArray(array, currentOffset, false)
-        currentOffset = sourceAddress.intoByteArray(array, currentOffset, false)
+        currentOffset = targetAddress.intoByteArray(array, currentOffset, false, true)
+        currentOffset = sourceAddress.intoByteArray(array, currentOffset, false, false)
         ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(nonce).array().copyInto(array, currentOffset)
         currentOffset += 8
         currentOffset = userAgent.intoByteArray(array, currentOffset)
@@ -49,11 +49,11 @@ data class VersionMessage(
     companion object {
         fun fromByteArray(buffer: ByteArray): VersionMessage {
             var currentRange = RangeShift.createRange(0, 4)
-            val protocolVersion: Int = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).int
+            val protocolVersion: Int = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).getInt(0)
             currentRange = RangeShift.createRange(currentRange.nextI, 8)
-            val services: Long = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).long
+            val services: Long = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).getLong(0)
             currentRange = RangeShift.createRange(currentRange.nextI, 8)
-            val timestamp: Long = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).long
+            val timestamp: Long = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).getLong(0)
             val targetAddress: NetworkAddress = NetworkAddress.fromByteArray(buffer, 20, false)
             val targetAddressBytes = targetAddress.calculateMessageSize(false)
             currentRange = RangeShift.createRange(currentRange.nextI, targetAddressBytes)
@@ -61,14 +61,14 @@ data class VersionMessage(
             val sourceAddressBytes = sourceAddress.calculateMessageSize(false)
             currentRange = RangeShift.createRange(currentRange.nextI, sourceAddressBytes)
             currentRange = RangeShift.createRange(currentRange.nextI, 8)
-            val nonce: Long = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).long
+            val nonce: Long = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).getLong(0)
             val userAgent: VariableString = VariableString.fromByteArray(buffer, 28 + targetAddressBytes + sourceAddressBytes)
             val userAgentBytes = userAgent.calculateMessageSize()
             currentRange = RangeShift.createRange(currentRange.nextI, userAgentBytes)
             currentRange = RangeShift.createRange(currentRange.nextI, 4)
-            val startHeight: Int = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).int
+            val startHeight: Int = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(currentRange.range).toByteArray()).getInt(0)
             currentRange = RangeShift.createRange(currentRange.nextI, 1)
-            val relay: Boolean = buffer[currentRange.range.start] != 0.toByte()
+            val relay: Boolean = buffer[currentRange.range.first] != 0.toByte()
 
             return VersionMessage(
                 protocolVersion = protocolVersion,

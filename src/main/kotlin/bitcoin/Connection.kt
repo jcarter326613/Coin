@@ -7,6 +7,7 @@ import bitcoin.messages.components.VariableString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import util.Log
 import java.io.InputStream
 import java.io.OutputStream
@@ -79,17 +80,20 @@ class Connection(
                 headerChecksumIsValid(header.checksum, payload)
     }
 
-    private fun headerChecksumIsValid(checksum: Int, payload: ByteArray): Boolean {
+    private fun headerChecksumIsValid(checksum: ByteArray, payload: ByteArray): Boolean {
         synchronized(sha256Hasher) {
             val computedHash = calculateHeaderChecksum(payload)
-            return checksum == computedHash
+            return checksum.contentEquals(computedHash)
         }
     }
 
-    private fun calculateHeaderChecksum(payload: ByteArray): Int {
+    private fun calculateHeaderChecksum(payload: ByteArray): ByteArray {
         val actualHash = sha256Hasher.digest(sha256Hasher.digest(payload))
-        val computedHash = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).get(actualHash, 0, 4).position(0).int
-        return computedHash
+        val computedHash = ByteBuffer.allocate(4)
+        for (i in 0 until 4) {
+            computedHash.put(actualHash[i])
+        }
+        return computedHash.array()
     }
 
     private fun processIncomingMessage(header: MessageHeader, payload: ByteArray) {
@@ -98,29 +102,45 @@ class Connection(
         }
     }
 
-    private fun readMessagePayload(payloadSize: Int): ByteArray {
+    private suspend fun readMessagePayload(payloadSize: Int): ByteArray {
         val payload = ByteArray(payloadSize)
         var bytesRead = 0
         while (!socket.isInputShutdown && bytesRead < payloadSize) {
-            val bytesToRead = inputStream.available()
+            var bytesToRead = inputStream.available()
+            if (bytesToRead > 0) {
+                if (bytesToRead + bytesRead > payloadSize) {
+                    bytesToRead = payloadSize - bytesRead
+                }
+                Log.info("Payload data received $bytesToRead bytes")
+            }
             inputStream.readNBytes(payload, bytesRead, bytesToRead)
             bytesRead += bytesToRead
+            yield()
         }
 
-        if (messageHeaderSize < bytesRead) {
+        if (payloadSize < bytesRead) {
             throw Exception("Read too many bytes")
         }
+        Log.info("Received payload")
+        Log.info(payload)
 
         return payload
     }
 
-    private fun readMessageHeader(): MessageHeader {
+    private suspend fun readMessageHeader(): MessageHeader {
         val header = ByteArray(messageHeaderSize)
         var bytesRead = 0
         while (!socket.isInputShutdown && bytesRead < messageHeaderSize) {
-            val bytesToRead = inputStream.available()
+            var bytesToRead = inputStream.available()
+            if (bytesToRead > 0) {
+                if (bytesToRead + bytesRead > messageHeaderSize) {
+                    bytesToRead = messageHeaderSize - bytesRead
+                }
+                Log.info("Header data received $bytesToRead bytes")
+            }
             inputStream.readNBytes(header, bytesRead, bytesToRead)
             bytesRead += bytesToRead
+            yield()
         }
 
         if (messageHeaderSize < bytesRead) {
@@ -128,7 +148,10 @@ class Connection(
         }
 
         // Convert the bytes into a message header object
-        return MessageHeader.fromByteArray(header)
+        val headerObj = MessageHeader.fromByteArray(header)
+        Log.info("Received command ${headerObj.command}")
+        Log.info(header)
+        return headerObj
     }
 
     private fun sendVersionMessage() {
@@ -137,7 +160,7 @@ class Connection(
             services = servicesBitFlag,
             timestamp = ZonedDateTime.now().toEpochSecond(),
             targetAddress = NetworkAddress(convertAddressToByteArray(seed), port),
-            sourceAddress = NetworkAddress(convertAddressToByteArray("0.0.0.0"), port),
+            sourceAddress = NetworkAddress(convertAddressToByteArray("0.0.0.0"), 0),
             nonce = Random.nextLong(),
             userAgent = VariableString(""),
             startHeight = BlockDb.instance.lastBlock,
@@ -154,32 +177,44 @@ class Connection(
             messageChecksum
         )
         val headerByteArray = header.toByteArray()
-        Log.info("Version message header")
-        Log.info(headerByteArray)
-        Log.info("Version message payload")
-        Log.info(messageByteArray)
+
+        //val joinedByteBuffer = ByteBuffer.allocate(headerByteArray.size + messageByteArray.size)
+        //joinedByteBuffer.put(headerByteArray)
+        //joinedByteBuffer.put(messageByteArray)
+        //val joinedByteArray = joinedByteBuffer.array()
+        //Log.info("Version message")
+        //Log.info(joinedByteArray)
+        //outputStream.write(joinedByteArray)
         outputStream.write(headerByteArray)
         outputStream.write(messageByteArray)
         outputStream.flush()
     }
 
     private fun convertAddressToByteArray(a: String): ByteArray {
-        //Inet6Address.getAllByName(seed)  gets all the addresses.  We just want the first one for now.
-        val address = Inet6Address.getByName(a).address
-        if (address.size == 4) {
-            val lengthenedAddress = ByteArray(16)
-            for ( i in 0..9) {
-                lengthenedAddress[0] = 0
+        if (a == "0.0.0.0") {
+            val address = ByteArray(16)
+            for (i in 0..16) {
+                address[0] = 0
             }
-            lengthenedAddress[10] = 0xFF.toByte()
-            lengthenedAddress[11] = 0xFF.toByte()
-            lengthenedAddress[12] = address[0]
-            lengthenedAddress[13] = address[1]
-            lengthenedAddress[14] = address[2]
-            lengthenedAddress[15] = address[3]
-            return lengthenedAddress
+            return address
+        } else {
+            //Inet6Address.getAllByName(seed)  gets all the addresses.  We just want the first one for now.
+            val address = Inet6Address.getByName(a).address
+            if (address.size == 4) {
+                val lengthenedAddress = ByteArray(16)
+                for (i in 0..9) {
+                    lengthenedAddress[0] = 0
+                }
+                lengthenedAddress[10] = 0xFF.toByte()
+                lengthenedAddress[11] = 0xFF.toByte()
+                lengthenedAddress[12] = address[0]
+                lengthenedAddress[13] = address[1]
+                lengthenedAddress[14] = address[2]
+                lengthenedAddress[15] = address[3]
+                return lengthenedAddress
+            }
+            return address
         }
-        return address
     }
 
     companion object {

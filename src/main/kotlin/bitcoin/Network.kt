@@ -6,11 +6,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 class Network {
     val port: Short = 18333                                                                 //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
 
-    private val defaultSeedAddresses = listOf(                                              //https://github.com/bitcoin/bitcoin/blob/master/src/chainparams.cpp#L233
-        "testnet-seed.bitcoin.jonasschnelli.ch",
-        "seed.tbtc.petertodd.org",
-        "seed.testnet.bitcoin.sprovoost.nl",
+    private val defaultSeedAddresses = listOf(
         "testnet-seed.bluematt.me",
+        "seed.testnet.bitcoin.sprovoost.nl",
+        "seed.tbtc.petertodd.org",                                            //https://github.com/bitcoin/bitcoin/blob/master/src/chainparams.cpp#L233
+        "testnet-seed.bitcoin.jonasschnelli.ch",
     )
     private val activeConnections = mutableListOf<Connection>()
     private var isConnected = AtomicBoolean(false)

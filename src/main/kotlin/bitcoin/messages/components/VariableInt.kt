@@ -48,13 +48,13 @@ data class VariableInt(
             val leadingByte = buffer[startIndex]
             val value = when (leadingByte.toInt()) {
                 0xFD -> {
-                    ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 2).toByteArray()).long
+                    ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 2).toByteArray()).getLong(0)
                 }
                 0xFE -> {
-                    ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 4).toByteArray()).long
+                    ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 4).toByteArray()).getLong(0)
                 }
                 0xFF -> {
-                    ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 8).toByteArray()).long
+                    ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 8).toByteArray()).getLong(0)
                 }
                 else -> {
                     leadingByte.toLong()
