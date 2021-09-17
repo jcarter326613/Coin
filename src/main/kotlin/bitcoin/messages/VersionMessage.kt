@@ -2,6 +2,7 @@ package bitcoin.messages
 
 import bitcoin.messages.components.NetworkAddress
 import bitcoin.messages.components.VariableString
+import util.ByteManipulation
 import util.RangeShift
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -21,19 +22,14 @@ data class VersionMessage(
         val array = ByteArray(calculateMessageSize())
         var currentOffset = 0
 
-        ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(protocolVersion).array().copyInto(array)
-        currentOffset += 4
-        ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(services).array().copyInto(array, currentOffset)
-        currentOffset += 8
-        ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(timestamp).array().copyInto(array, 12)
-        currentOffset += 8
+        currentOffset = ByteManipulation.writeIntToArray(protocolVersion, array, currentOffset)
+        currentOffset = ByteManipulation.writeLongToArray(services, array, currentOffset)
+        currentOffset = ByteManipulation.writeLongToArray(timestamp, array, currentOffset)
         currentOffset = targetAddress.intoByteArray(array, currentOffset, false, true)
         currentOffset = sourceAddress.intoByteArray(array, currentOffset, false, false)
-        ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(nonce).array().copyInto(array, currentOffset)
-        currentOffset += 8
+        currentOffset = ByteManipulation.writeLongToArray(nonce, array, currentOffset)
         currentOffset = userAgent.intoByteArray(array, currentOffset)
-        ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(startHeight).array().copyInto(array, currentOffset)
-        currentOffset += 4
+        currentOffset = ByteManipulation.writeIntToArray(startHeight, array, currentOffset)
         array[currentOffset] = if (relay) 1 else 0
         return array
     }

@@ -1,6 +1,7 @@
 package bitcoin.messages
 
 import bitcoin.Connection
+import util.ByteManipulation
 import util.Log
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -21,15 +22,17 @@ class MessageHeader(
     fun toByteArray(): ByteArray {
         val commandArray = command.toByteArray()
         val array = ByteArray(Connection.messageHeaderSize)
+        var currentOffset = 0
 
-        ByteBuffer.allocate(4).putInt(magic).array().copyInto(array)
+        currentOffset = ByteManipulation.writeIntToArray(magic, array, currentOffset, ByteOrder.BIG_ENDIAN)
         commandArray.copyInto(array, 4)
         for (i in commandArray.size..12) {
             array[4+i] = 0
         }
+        currentOffset += 12
 
-        ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(payloadLength).array().copyInto(array, 16)
-        checksum.copyInto(array, 20)
+        currentOffset = ByteManipulation.writeIntToArray(payloadLength, array, currentOffset)
+        checksum.copyInto(array, currentOffset)
         return array
     }
 
