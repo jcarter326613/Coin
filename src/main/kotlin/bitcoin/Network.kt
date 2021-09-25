@@ -12,6 +12,7 @@ import java.nio.ByteBuffer
 import java.time.ZonedDateTime
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.floor
 import kotlin.random.Random
 
 class Network: IMessageProcessor {
@@ -33,8 +34,8 @@ class Network: IMessageProcessor {
 
         // First connect to the default seeds and ask them for other clients
         for (seed in defaultSeedAddresses) {
-            val address = Connection.convertAddressToByteArray(seed)
-            val networkAddress = NetworkAddress(address, port)
+            val address = NetworkAddress.convertAddressToByteArray(seed)
+            val networkAddress = NetworkAddress(address, port, NetworkAddress.serviceFlagsAll)
             activePeers[networkAddress] = ZonedDateTime.now()
         }
         establishNewRandomConnection()
@@ -42,8 +43,16 @@ class Network: IMessageProcessor {
         // Start the cleanup thread
         GlobalScope.launch {
             while (true) {
-                delay(cleanoutDelayMilliseconds)
-                cleanoutBadConnections()
+                delay(cleanOutDelayMilliseconds)
+                cleanOutBadConnections()
+            }
+        }
+
+        // Start the pruning thread
+        GlobalScope.launch {
+            while (true) {
+                delay(pruneDelayMilliseconds)
+                pruneConnections()
             }
         }
     }
@@ -55,8 +64,7 @@ class Network: IMessageProcessor {
             connection.sendVerack()
         } else {
             connection.close()
-            removeActiveConnection(connection)
-            Log.info("Connection ${connection.seed}(${connection.port}) removed due to old version ${payload.protocolVersion} < ${Connection.minimumProtocolVersion}.")
+            Log.info("Connection ${connection.addr.address}(${connection.addr.port}) removed due to old version ${payload.protocolVersion} < ${Connection.minimumProtocolVersion}.")
         }
     }
 
@@ -67,25 +75,12 @@ class Network: IMessageProcessor {
             }
         }
 
-        if (activeConnections.size < maxActiveConnections) {
-            val entryIndex = Random.nextInt(payload.entries.size)
-        }
-    }
-
-    private fun establishSeedConnection(seed: String) {
-        val newConnection = Connection(seed, port, this )
-        activeConnections.add(newConnection)
+        establishNewRandomConnection()
     }
 
     private fun removeActiveConnection(connectionToRemove: Connection) {
         synchronized(activeConnections) {
-            for (i in activeConnections.indices) {
-                val current = activeConnections[i]
-                if (current.seed == connectionToRemove.seed && current.port == connectionToRemove.port) {
-                    activeConnections.removeAt(i)
-                    return@synchronized
-                }
-            }
+            activeConnections.remove(connectionToRemove)
         }
 
         synchronized(activePeers) {
@@ -93,13 +88,25 @@ class Network: IMessageProcessor {
         }
     }
 
-    private fun cleanoutBadConnections() {
+    private fun cleanOutBadConnections() {
         for (connection in activeConnections) {
-            if (connection.isClosed) {
-                removeActiveConnection(connection)
+            if (connection.isClosed || connection.isTimedOut) {
+                connection.close()
             }
         }
         establishNewRandomConnection()
+    }
+
+    private fun pruneConnections() {
+        val targetNumConnections = floor(maxActiveConnections * (1-prunePercentage))
+        while (activeConnections.size > targetNumConnections) {
+            var connectionToClose: Connection?
+            synchronized(activeConnections) {
+                val i = Random.nextInt(activeConnections.size)
+                connectionToClose = activeConnections[i]
+            }
+            connectionToClose?.close()
+        }
     }
 
     private fun establishNewRandomConnection() {
@@ -112,28 +119,52 @@ class Network: IMessageProcessor {
         }
 
         // Add a new connection until we have all the connections we need to have
-        while (activeConnections.size < maxActiveConnections) {
-            // Select an address to connect to
-            var peer: NetworkAddress
-            synchronized(activePeers) {
-                while (activePeers.isNotEmpty()) {
-                    val i = Random.nextInt(activePeers.size)
-                    peer = activePeers.keys.toTypedArray()[i]
-                    val entryDate = activePeers[peer] ?: throw Exception("Should never happen")
-                    if (entryDate.plusSeconds(maxPeerAgeSeconds.toLong()).isBefore(ZonedDateTime.now())) {
-                        activePeers.remove(peer)
+        try {
+            while (activeConnections.size < maxActiveConnections) {
+                // Select an address to connect to
+                var peer: NetworkAddress? = null
+                synchronized(activePeers) {
+                    while (activePeers.isNotEmpty()) {
+                        val i = Random.nextInt(activePeers.size)
+                        peer = activePeers.keys.toTypedArray()[i]
+                        val entryDate = activePeers[peer] ?: throw Exception("Should never happen")
+                        if (entryDate.plusSeconds(maxPeerAgeSeconds.toLong()).isBefore(ZonedDateTime.now())) {
+                            activePeers.remove(peer)
+                        } else {
+                            break
+                        }
                     }
-                    break
+                }
+
+                // Connect to the address
+                synchronized(activeConnections) {
+                    val setPeer = peer
+                    if (setPeer != null) {
+                        var alreadyConnected = false
+                        for (connection in activeConnections) {
+                            if (connection.addr == setPeer) {
+                                alreadyConnected = true
+                                break
+                            }
+                        }
+                        if (!alreadyConnected) {
+                            activeConnections.add(Connection(setPeer, this) {
+                                removeActiveConnection(it)
+                            })
+                        }
+                    }
                 }
             }
-
-            // Connect to the address
+        } finally {
+            numConnectionsBeingCreated.decrementAndGet()
         }
     }
 
     companion object {
         private const val maxActiveConnections = 1
-        private const val cleanoutDelayMilliseconds = 60 * 1000L
+        private const val cleanOutDelayMilliseconds = 60 * 1000L
+        private const val pruneDelayMilliseconds = 60 * 5 * 1000L
         private const val maxPeerAgeSeconds = 60 * 60 * 3             //https://en.bitcoin.it/wiki/Protocol_documentation#getaddr
+        private const val prunePercentage = 0.1
     }
 }

@@ -2,12 +2,15 @@ package bitcoin
 
 import bitcoin.messages.*
 import bitcoin.messages.components.NetworkAddress
+import bitcoin.messages.components.NetworkAddress.Companion.convertAddressToByteArray
+import bitcoin.messages.components.NetworkAddress.Companion.convertByteArrayToAddress
 import bitcoin.messages.components.VariableString
 import kotlinx.coroutines.*
 import util.Log
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.Inet6Address
+import java.net.InetAddress
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -16,9 +19,9 @@ import java.time.ZonedDateTime
 import kotlin.random.Random
 
 class Connection(
-    val seed: String,
-    val port: Short,
-    private val messageProcessor: IMessageProcessor
+    val addr: NetworkAddress,
+    private val messageProcessor: IMessageProcessor,
+    private val disconnectHandler: ((c: Connection) -> Unit)
 ) {
     var protocolVersion = minimumProtocolVersion
     val sha256Hasher = MessageDigest.getInstance("SHA-256")
@@ -26,7 +29,11 @@ class Connection(
     private var _isReady = false
     val isReady: Boolean get() = _isReady || isClosed
     var isClosed = false
-        private set
+        private set(value) {
+            field = value
+            disconnectHandler(this)
+        }
+    private var suppressDisconnectNotification: Boolean = false
 
     val isTimedOut: Boolean
         get() {
@@ -47,10 +54,10 @@ class Connection(
     private var lastPingNonce: Long? = null
 
     init {
-        Log.info("Connecting to $seed:$port")
+        Log.info("Connecting to $addr")
         GlobalScope.launch(Dispatchers.IO) {
             try {
-                socket = Socket(seed, port.toInt())
+                socket = Socket(convertByteArrayToAddress(addr.address), addr.port.toInt())
                 inputStream = socket.getInputStream()
                 outputStream = socket.getOutputStream()
 
@@ -63,9 +70,23 @@ class Connection(
         }
     }
 
+    override fun equals(other: Any?): Boolean {
+        val otherConnection = other as? Connection ?: return false
+        return otherConnection.addr == addr
+    }
+
+    override fun hashCode(): Int {
+        return addr.hashCode()
+    }
+
     fun close() {
         isClosed = true
-        socket.close()
+        try {
+            if (!socket.isClosed) {
+                socket.close()
+            }
+        } catch (e: Throwable) {
+        }
     }
 
     fun sendVerack() {
@@ -96,7 +117,7 @@ class Connection(
                     }
                 }
             } catch (e: Throwable) {
-                Log.error("Exception from seed ($seed) and port ($port).  Disconnecting.}")
+                Log.error("Exception from address $addr.  Disconnecting.}")
                 Log.error(e)
                 socket.close()
             } finally {
@@ -175,7 +196,6 @@ class Connection(
     private fun processIncomingPong(message: PongMessage) {
         if (lastPingNonce != message.nonce) {
             close()
-            return
         }
     }
 
@@ -226,10 +246,10 @@ class Connection(
     private fun sendVersionMessage() {
         val message = VersionMessage(
             protocolVersion = protocolVersion,
-            services = servicesBitFlag,
+            services = NetworkAddress.serviceFlagsNetwork,
             timestamp = ZonedDateTime.now().toEpochSecond(),
-            targetAddress = NetworkAddress(convertAddressToByteArray(seed), port),
-            sourceAddress = NetworkAddress(convertAddressToByteArray("0.0.0.0"), 0),
+            targetAddress = addr,
+            sourceAddress = NetworkAddress(convertAddressToByteArray("0.0.0.0"), 0, NetworkAddress.serviceFlagsNetwork),
             nonce = Random.nextLong(),
             userAgent = VariableString(""),
             startHeight = BlockDb.instance.lastBlock,
@@ -259,37 +279,9 @@ class Connection(
     companion object {
         const val messageHeaderStart = 0x0b110907          //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
         const val messageHeaderSize = 4 + 12 + 4 + 4       //https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
-        const val servicesBitFlag = 1L                     //https://en.bitcoin.it/wiki/Protocol_documentation
         const val timeoutSeconds = 60                      //https://en.bitcoin.it/wiki/Protocol_documentation#getaddr
         const val initialSetupTimeoutSeconds = 5
         const val minimumProtocolVersion = 70015           //https://developer.bitcoin.org/reference/p2p_networking.html#protocol-versions
         const val millisecondsBetweenPing = (timeoutSeconds - 5) * 1000L
-
-        fun convertAddressToByteArray(a: String): ByteArray {
-            if (a == "0.0.0.0") {
-                val address = ByteArray(16)
-                for (i in 0..16) {
-                    address[0] = 0
-                }
-                return address
-            } else {
-                //Inet6Address.getAllByName(seed)  gets all the addresses.  We just want the first one for now.
-                val address = Inet6Address.getByName(a).address
-                if (address.size == 4) {
-                    val lengthenedAddress = ByteArray(16)
-                    for (i in 0..9) {
-                        lengthenedAddress[0] = 0
-                    }
-                    lengthenedAddress[10] = 0xFF.toByte()
-                    lengthenedAddress[11] = 0xFF.toByte()
-                    lengthenedAddress[12] = address[0]
-                    lengthenedAddress[13] = address[1]
-                    lengthenedAddress[14] = address[2]
-                    lengthenedAddress[15] = address[3]
-                    return lengthenedAddress
-                }
-                return address
-            }
-        }
     }
 }

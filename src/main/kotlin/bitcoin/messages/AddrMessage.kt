@@ -17,7 +17,7 @@ data class AddrMessage(
         val numItems = VariableInt(entries.size.toLong())
         currentOffset = numItems.intoByteArray(array, currentOffset)
         for (entry in entries) {
-            currentOffset = entry.intoByteArray(array, currentOffset)
+            currentOffset = entry.intoByteArray(array, currentOffset, includeTime = true)
         }
         return array
     }
@@ -38,7 +38,7 @@ data class AddrMessage(
             val addressList = mutableListOf<NetworkAddress>()
             for (i in 1..size.value) {
                 val item = NetworkAddress.fromByteArray(buffer, currentOffset, true)
-                currentOffset += item.calculateMessageSize()
+                currentOffset += item.calculateMessageSize(includeTime = true)
                 addressList.add(item)
             }
 
