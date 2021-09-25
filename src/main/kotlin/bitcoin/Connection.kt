@@ -1,13 +1,12 @@
 package bitcoin
 
 import bitcoin.messages.MessageHeader
+import bitcoin.messages.PingMessage
+import bitcoin.messages.PongMessage
 import bitcoin.messages.VersionMessage
 import bitcoin.messages.components.NetworkAddress
 import bitcoin.messages.components.VariableString
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.yield
+import kotlinx.coroutines.*
 import util.Log
 import java.io.InputStream
 import java.io.OutputStream
@@ -46,6 +45,7 @@ class Connection(
 
     private val creationTime = ZonedDateTime.now()
     private var lastMessageReceiveTime: ZonedDateTime? = null
+    private var lastPingNonce: Long? = null
 
     init {
         Log.info("Connecting to $seed:$port")
@@ -128,12 +128,50 @@ class Connection(
     }
 
     private fun processIncomingMessage(header: MessageHeader, payload: ByteArray) {
+        if (isClosed) return
         lastMessageReceiveTime = ZonedDateTime.now()
 
         when (header.command) {
             "version" -> messageProcessor.processIncomingMessageVersion(header, VersionMessage.fromByteArray(payload), this)
-            "verack" -> _isReady = true
+            "verack" -> processIncomingVerack()
+            "ping" -> processIncomingPing(PingMessage.fromByteArray(payload))
+            "pong" -> processIncomingPong(PongMessage.fromByteArray(payload))
             else -> Log.info("Received command ${header.command} but don't know how to process")
+        }
+    }
+
+    private fun processIncomingVerack() {
+        _isReady = true
+
+        // Start up the ping cycle
+        GlobalScope.launch(Dispatchers.IO) {
+            delay(millisecondsBetweenPing)
+            while (!isClosed) {
+                val elapsedTimeSinceLastMessage = lastMessageReceiveTime?.let {
+                    (ZonedDateTime.now().toEpochSecond() - it.toEpochSecond()) * 1000
+                } ?: millisecondsBetweenPing
+                val nextWaitTime = if (elapsedTimeSinceLastMessage >= millisecondsBetweenPing) {
+                    val lastPingNonce = Random.nextLong()
+                    sendMessage("ping", PingMessage(lastPingNonce).toByteArray())
+                    this@Connection.lastPingNonce = lastPingNonce
+                    millisecondsBetweenPing
+                } else {
+                    millisecondsBetweenPing - elapsedTimeSinceLastMessage
+                }
+                delay(nextWaitTime)
+            }
+        }
+    }
+
+    private fun processIncomingPing(message: PingMessage) {
+        val toSend = PongMessage(nonce = message.nonce)
+        sendMessage("pong", toSend.toByteArray())
+    }
+
+    private fun processIncomingPong(message: PongMessage) {
+        if (lastPingNonce != message.nonce) {
+            close()
+            return
         }
     }
 
@@ -178,9 +216,7 @@ class Connection(
         }
 
         // Convert the bytes into a message header object
-        val headerObj = MessageHeader.fromByteArray(header)
-        Log.info("Received command ${headerObj.command}")
-        return headerObj
+        return MessageHeader.fromByteArray(header)
     }
 
     private fun sendVersionMessage() {
@@ -197,18 +233,22 @@ class Connection(
         )
 
         val messageByteArray = message.toByteArray()
-        val messageChecksum = calculateHeaderChecksum(messageByteArray)
+        sendMessage("version", messageByteArray)
+    }
+
+    private fun sendMessage(command: String, message: ByteArray) {
+        val messageChecksum = calculateHeaderChecksum(message)
 
         val header = MessageHeader(
             messageHeaderStart,
-            "version",
-            messageByteArray.size,
+            command,
+            message.size,
             messageChecksum
         )
         val headerByteArray = header.toByteArray()
 
         outputStream.write(headerByteArray)
-        outputStream.write(messageByteArray)
+        outputStream.write(message)
         outputStream.flush()
     }
 
@@ -243,8 +283,9 @@ class Connection(
         const val messageHeaderStart = 0x0b110907          //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
         const val messageHeaderSize = 4 + 12 + 4 + 4       //https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
         const val servicesBitFlag = 1L                     //https://en.bitcoin.it/wiki/Protocol_documentation
-        const val timeoutSeconds = 60 * 5
+        const val timeoutSeconds = 60 * 60 * 3             //https://en.bitcoin.it/wiki/Protocol_documentation#getaddr
         const val initialSetupTimeoutSeconds = 5
         const val minimumProtocolVersion = 70015           //https://developer.bitcoin.org/reference/p2p_networking.html#protocol-versions
+        const val millisecondsBetweenPing = (timeoutSeconds - 5) * 1000L
     }
 }

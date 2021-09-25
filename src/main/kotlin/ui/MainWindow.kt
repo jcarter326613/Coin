@@ -13,8 +13,6 @@ class MainWindow {
 
     init {
         mainFrame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
-        //mainFrame.preferredSize = mainFrame.graphicsConfiguration.device.defaultConfiguration.bounds.size
-        //mainFrame.extendedState = JFrame.MAXIMIZED_BOTH
         mainFrame.layout = FlowLayout()
 
         val connectButton = JButton("Connect")

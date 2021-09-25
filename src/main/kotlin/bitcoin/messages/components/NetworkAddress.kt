@@ -1,6 +1,7 @@
 package bitcoin.messages.components
 
 import bitcoin.Connection
+import util.ByteManipulation
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.ZonedDateTime
@@ -19,19 +20,17 @@ data class NetworkAddress(
         val time = ZonedDateTime.now().toEpochSecond()
         var currentOffset = destIndex
         if (includeTime) {
-            ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(time.toInt()).array().copyInto(dest, currentOffset)
-            currentOffset += 4
+            currentOffset = ByteManipulation.writeIntToArray(time.toInt(), dest, currentOffset, ByteOrder.LITTLE_ENDIAN)
         }
         if (includeAllServices) {
-            ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(-1L).array().copyInto(dest, currentOffset)
+            currentOffset = ByteManipulation.writeLongToArray(-1L, dest, currentOffset, ByteOrder.LITTLE_ENDIAN)
         } else {
-            ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(Connection.servicesBitFlag).array().copyInto(dest, currentOffset)
+            currentOffset = ByteManipulation.writeLongToArray(Connection.servicesBitFlag, dest, currentOffset, ByteOrder.LITTLE_ENDIAN)
         }
-        currentOffset += 8
         address.copyInto(dest, currentOffset)
-        currentOffset += 16
-        ByteBuffer.allocate(2).putShort(port).array().copyInto(dest, currentOffset)
-        return currentOffset + 2
+        currentOffset += address.size
+        currentOffset = ByteManipulation.writeShortToArray(port, dest, currentOffset, ByteOrder.LITTLE_ENDIAN)
+        return currentOffset
     }
 
     fun calculateMessageSize(includeTime: Boolean): Int {
@@ -42,17 +41,35 @@ data class NetworkAddress(
         }
     }
 
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as NetworkAddress
+
+        if (!address.contentEquals(other.address)) return false
+        if (port != other.port) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = address.contentHashCode()
+        result = 31 * result + port
+        return result
+    }
+
     companion object {
         fun fromByteArray(buffer: ByteArray, startIndex: Int, includeTime: Boolean): NetworkAddress {
             return if (includeTime) {
                 NetworkAddress(
                     buffer.slice(startIndex + 12 until startIndex + 28).toByteArray(),
-                    ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex + 28 until startIndex + 30).toByteArray()).getShort(0)
+                    ByteManipulation.readShortFromArray(buffer, startIndex + 28, ByteOrder.LITTLE_ENDIAN).value
                 )
             } else {
                 NetworkAddress(
                     buffer.slice(startIndex + 8 until startIndex + 24).toByteArray(),
-                    ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex + 24 until startIndex + 26).toByteArray()).getShort(0)
+                    ByteManipulation.readShortFromArray(buffer, startIndex + 24, ByteOrder.LITTLE_ENDIAN).value
                 )
             }
         }

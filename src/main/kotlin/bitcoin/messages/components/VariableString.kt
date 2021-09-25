@@ -1,7 +1,5 @@
 package bitcoin.messages.components
 
-import java.nio.ByteBuffer
-
 data class VariableString (
     val s: String
 ) {

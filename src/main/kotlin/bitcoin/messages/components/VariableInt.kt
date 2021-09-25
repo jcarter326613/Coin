@@ -1,5 +1,6 @@
 package bitcoin.messages.components
 
+import util.ByteManipulation
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -14,15 +15,15 @@ data class VariableInt(
             }
             3 -> {
                 dest[destIndex] = (0xFD).toByte()
-                ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(value.toShort()).array().copyInto(dest, destIndex + 1)
+                ByteManipulation.writeShortToArray(value.toShort(), dest, destIndex + 1, ByteOrder.LITTLE_ENDIAN)
             }
             5 -> {
                 dest[destIndex] = (0xFE).toByte()
-                ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value.toInt()).array().copyInto(dest, destIndex + 1)
+                ByteManipulation.writeIntToArray(value.toInt(), dest, destIndex + 1, ByteOrder.LITTLE_ENDIAN)
             }
             9 -> {
                 dest[destIndex] = (0xFF).toByte()
-                ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array().copyInto(dest, destIndex + 1)
+                ByteManipulation.writeLongToArray(value, dest, destIndex + 1, ByteOrder.LITTLE_ENDIAN)
             }
             else -> {
                 throw Exception("Invalid size")
@@ -46,20 +47,20 @@ data class VariableInt(
     companion object {
         fun fromByteArray(buffer: ByteArray, startIndex: Int): VariableInt {
             val leadingByte = buffer[startIndex]
-            val value = when (leadingByte.toInt()) {
-                0xFD -> {
-                    ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 2).toByteArray()).getLong(0)
+            val value = when (leadingByte) {
+                0xFD.toByte() -> {
+                    ByteManipulation.readShortFromArray(buffer, startIndex + 1).value
                 }
-                0xFE -> {
-                    ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 4).toByteArray()).getLong(0)
+                0xFE.toByte() -> {
+                    ByteManipulation.readIntFromArray(buffer, startIndex + 1).value
                 }
-                0xFF -> {
-                    ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).put(buffer.slice(startIndex until startIndex + 8).toByteArray()).getLong(0)
+                0xFF.toByte() -> {
+                    ByteManipulation.readLongFromArray(buffer, startIndex + 1).value
                 }
                 else -> {
                     leadingByte.toLong()
                 }
-            }
+            }.toLong()
             return VariableInt(value)
         }
     }
