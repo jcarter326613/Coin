@@ -1,9 +1,6 @@
 package bitcoin
 
-import bitcoin.messages.MessageHeader
-import bitcoin.messages.PingMessage
-import bitcoin.messages.PongMessage
-import bitcoin.messages.VersionMessage
+import bitcoin.messages.*
 import bitcoin.messages.components.NetworkAddress
 import bitcoin.messages.components.VariableString
 import kotlinx.coroutines.*
@@ -38,6 +35,8 @@ class Connection(
             return (lastMessageReceiveTime == null && nowSeconds - creationTime.toEpochSecond() > initialSetupTimeoutSeconds) ||
                     (lastMessageReceiveTime != null && nowSeconds - lastMessageReceiveTime.toEpochSecond() > timeoutSeconds)
         }
+
+    var address: NetworkAddress? = null
 
     lateinit var socket: Socket
     lateinit var inputStream: InputStream
@@ -132,10 +131,15 @@ class Connection(
         lastMessageReceiveTime = ZonedDateTime.now()
 
         when (header.command) {
-            "version" -> messageProcessor.processIncomingMessageVersion(header, VersionMessage.fromByteArray(payload), this)
+            "version" -> {
+                val versionMessage = VersionMessage.fromByteArray(payload)
+                address = versionMessage.sourceAddress
+                messageProcessor.processIncomingMessageVersion(versionMessage, this)
+            }
             "verack" -> processIncomingVerack()
             "ping" -> processIncomingPing(PingMessage.fromByteArray(payload))
             "pong" -> processIncomingPong(PongMessage.fromByteArray(payload))
+            "addr" -> messageProcessor.processIncomingMessageAddr(AddrMessage.fromByteArray(payload), this)
             else -> Log.info("Received command ${header.command} but don't know how to process")
         }
     }
@@ -252,40 +256,40 @@ class Connection(
         outputStream.flush()
     }
 
-    private fun convertAddressToByteArray(a: String): ByteArray {
-        if (a == "0.0.0.0") {
-            val address = ByteArray(16)
-            for (i in 0..16) {
-                address[0] = 0
-            }
-            return address
-        } else {
-            //Inet6Address.getAllByName(seed)  gets all the addresses.  We just want the first one for now.
-            val address = Inet6Address.getByName(a).address
-            if (address.size == 4) {
-                val lengthenedAddress = ByteArray(16)
-                for (i in 0..9) {
-                    lengthenedAddress[0] = 0
-                }
-                lengthenedAddress[10] = 0xFF.toByte()
-                lengthenedAddress[11] = 0xFF.toByte()
-                lengthenedAddress[12] = address[0]
-                lengthenedAddress[13] = address[1]
-                lengthenedAddress[14] = address[2]
-                lengthenedAddress[15] = address[3]
-                return lengthenedAddress
-            }
-            return address
-        }
-    }
-
     companion object {
         const val messageHeaderStart = 0x0b110907          //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
         const val messageHeaderSize = 4 + 12 + 4 + 4       //https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
         const val servicesBitFlag = 1L                     //https://en.bitcoin.it/wiki/Protocol_documentation
-        const val timeoutSeconds = 60 * 60 * 3             //https://en.bitcoin.it/wiki/Protocol_documentation#getaddr
+        const val timeoutSeconds = 60                      //https://en.bitcoin.it/wiki/Protocol_documentation#getaddr
         const val initialSetupTimeoutSeconds = 5
         const val minimumProtocolVersion = 70015           //https://developer.bitcoin.org/reference/p2p_networking.html#protocol-versions
         const val millisecondsBetweenPing = (timeoutSeconds - 5) * 1000L
+
+        fun convertAddressToByteArray(a: String): ByteArray {
+            if (a == "0.0.0.0") {
+                val address = ByteArray(16)
+                for (i in 0..16) {
+                    address[0] = 0
+                }
+                return address
+            } else {
+                //Inet6Address.getAllByName(seed)  gets all the addresses.  We just want the first one for now.
+                val address = Inet6Address.getByName(a).address
+                if (address.size == 4) {
+                    val lengthenedAddress = ByteArray(16)
+                    for (i in 0..9) {
+                        lengthenedAddress[0] = 0
+                    }
+                    lengthenedAddress[10] = 0xFF.toByte()
+                    lengthenedAddress[11] = 0xFF.toByte()
+                    lengthenedAddress[12] = address[0]
+                    lengthenedAddress[13] = address[1]
+                    lengthenedAddress[14] = address[2]
+                    lengthenedAddress[15] = address[3]
+                    return lengthenedAddress
+                }
+                return address
+            }
+        }
     }
 }
