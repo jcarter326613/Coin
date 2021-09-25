@@ -1,9 +1,12 @@
 package bitcoin
 
+import bitcoin.messages.MessageHeader
+import bitcoin.messages.VersionMessage
+import util.Log
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 
-class Network {
+class Network: IMessageProcessor {
     val port: Short = 18333                                                                 //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
 
     private val defaultSeedAddresses = listOf(
@@ -25,15 +28,30 @@ class Network {
         }
     }
 
+    override fun processIncomingMessageVersion(header: MessageHeader, payload: VersionMessage, connection: Connection) {
+        if (payload.protocolVersion < Connection.minimumProtocolVersion) {
+            connection.close()
+            removeActiveConnection(connection)
+            Log.info("Connection ${connection.seed}(${connection.port}) removed due to old version ${payload.protocolVersion} < ${Connection.minimumProtocolVersion}.")
+        } else {
+            connection.sendVerack()
+        }
+    }
+
     private fun establishSeedConnection(seed: String) {
-        val newConnection = Connection(seed, port, {message, connection -> receiveMessage(message, connection)}, {connectionDisconnected(it)} )
+        val newConnection = Connection(seed, port, this )
         activeConnections.add(newConnection)
     }
 
-    private fun receiveMessage(message: String, connection: Connection) {
-
-    }
-
-    private fun connectionDisconnected(connection: Connection) {
+    private fun removeActiveConnection(connectionToRemove: Connection) {
+        synchronized(activeConnections) {
+            for (i in activeConnections.indices) {
+                val current = activeConnections[i]
+                if (current.seed == connectionToRemove.seed && current.port == connectionToRemove.port) {
+                    activeConnections.removeAt(i)
+                    return@synchronized
+                }
+            }
+        }
     }
 }

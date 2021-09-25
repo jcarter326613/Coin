@@ -22,10 +22,9 @@ import kotlin.random.Random
 class Connection(
     val seed: String,
     val port: Short,
-    messageCallback: (message: String, connection: Connection) -> Unit,
-    disconnectionCallback: (connection: Connection) -> Unit,
+    private val messageProcessor: IMessageProcessor
 ) {
-    val protocolVersion = 70015                                                             //https://developer.bitcoin.org/reference/p2p_networking.html#protocol-versions
+    var protocolVersion = minimumProtocolVersion
     val sha256Hasher = MessageDigest.getInstance("SHA-256")
 
     private var _isReady = false
@@ -33,9 +32,20 @@ class Connection(
     var isClosed = false
         private set
 
+    val isTimedOut: Boolean
+        get() {
+            val nowSeconds = ZonedDateTime.now().toEpochSecond()
+            val lastMessageReceiveTime = lastMessageReceiveTime
+            return (lastMessageReceiveTime == null && nowSeconds - creationTime.toEpochSecond() > initialSetupTimeoutSeconds) ||
+                    (lastMessageReceiveTime != null && nowSeconds - lastMessageReceiveTime.toEpochSecond() > timeoutSeconds)
+        }
+
     lateinit var socket: Socket
     lateinit var inputStream: InputStream
     lateinit var outputStream: OutputStream
+
+    private val creationTime = ZonedDateTime.now()
+    private var lastMessageReceiveTime: ZonedDateTime? = null
 
     init {
         Log.info("Connecting to $seed:$port")
@@ -52,6 +62,27 @@ class Connection(
                 isClosed = true
             }
         }
+    }
+
+    fun close() {
+        isClosed = true
+        socket.close()
+    }
+
+    fun sendVerack() {
+        val messageByteArray = "".toByteArray()
+        val messageChecksum = calculateHeaderChecksum(messageByteArray)
+
+        val header = MessageHeader(
+            messageHeaderStart,
+            "verack",
+            messageByteArray.size,
+            messageChecksum
+        )
+        val headerByteArray = header.toByteArray()
+
+        outputStream.write(headerByteArray)
+        outputStream.flush()
     }
 
     private fun startStreamReader() {
@@ -97,8 +128,12 @@ class Connection(
     }
 
     private fun processIncomingMessage(header: MessageHeader, payload: ByteArray) {
-        when (header.command) {
+        lastMessageReceiveTime = ZonedDateTime.now()
 
+        when (header.command) {
+            "version" -> messageProcessor.processIncomingMessageVersion(header, VersionMessage.fromByteArray(payload), this)
+            "verack" -> _isReady = true
+            else -> Log.info("Received command ${header.command} but don't know how to process")
         }
     }
 
@@ -111,7 +146,6 @@ class Connection(
                 if (bytesToRead + bytesRead > payloadSize) {
                     bytesToRead = payloadSize - bytesRead
                 }
-                Log.info("Payload data received $bytesToRead bytes")
             }
             inputStream.readNBytes(payload, bytesRead, bytesToRead)
             bytesRead += bytesToRead
@@ -121,9 +155,6 @@ class Connection(
         if (payloadSize < bytesRead) {
             throw Exception("Read too many bytes")
         }
-        Log.info("Received payload")
-        Log.info(payload)
-
         return payload
     }
 
@@ -136,7 +167,6 @@ class Connection(
                 if (bytesToRead + bytesRead > messageHeaderSize) {
                     bytesToRead = messageHeaderSize - bytesRead
                 }
-                Log.info("Header data received $bytesToRead bytes")
             }
             inputStream.readNBytes(header, bytesRead, bytesToRead)
             bytesRead += bytesToRead
@@ -150,7 +180,6 @@ class Connection(
         // Convert the bytes into a message header object
         val headerObj = MessageHeader.fromByteArray(header)
         Log.info("Received command ${headerObj.command}")
-        Log.info(header)
         return headerObj
     }
 
@@ -178,13 +207,6 @@ class Connection(
         )
         val headerByteArray = header.toByteArray()
 
-        //val joinedByteBuffer = ByteBuffer.allocate(headerByteArray.size + messageByteArray.size)
-        //joinedByteBuffer.put(headerByteArray)
-        //joinedByteBuffer.put(messageByteArray)
-        //val joinedByteArray = joinedByteBuffer.array()
-        //Log.info("Version message")
-        //Log.info(joinedByteArray)
-        //outputStream.write(joinedByteArray)
         outputStream.write(headerByteArray)
         outputStream.write(messageByteArray)
         outputStream.flush()
@@ -218,9 +240,11 @@ class Connection(
     }
 
     companion object {
-        const val messageHeaderStart = 0x0b110907                                                       //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
-        val messageHeaderStartBytes = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(messageHeaderStart)   //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
-        const val messageHeaderSize = 4 + 12 + 4 + 4                                                    //https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
-        const val servicesBitFlag = 1L                                                                //https://en.bitcoin.it/wiki/Protocol_documentation
+        const val messageHeaderStart = 0x0b110907          //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
+        const val messageHeaderSize = 4 + 12 + 4 + 4       //https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
+        const val servicesBitFlag = 1L                     //https://en.bitcoin.it/wiki/Protocol_documentation
+        const val timeoutSeconds = 60 * 5
+        const val initialSetupTimeoutSeconds = 5
+        const val minimumProtocolVersion = 70015           //https://developer.bitcoin.org/reference/p2p_networking.html#protocol-versions
     }
 }

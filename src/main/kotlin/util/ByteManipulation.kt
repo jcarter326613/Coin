@@ -35,5 +35,25 @@ class ByteManipulation {
 
             return offset + 8
         }
+
+        fun readLongFromArray(source: ByteArray, offset: Int, endian: ByteOrder = ByteOrder.LITTLE_ENDIAN): LongResult {
+            var retVal: Long = 0
+
+            val range = when (endian) {
+                ByteOrder.LITTLE_ENDIAN -> 0 until 8
+                ByteOrder.BIG_ENDIAN -> 7 downTo 0
+                else -> throw Exception("Invalid endian")
+            }
+
+            var bI = 0
+            for (i in range) {
+                retVal = retVal or (source[offset + i].toUByte().toLong() shl (bI * 8))
+                bI++
+            }
+
+            return LongResult(retVal, offset + 8)
+        }
     }
+
+    data class LongResult(val value: Long, val nextIndex: Int)
 }
