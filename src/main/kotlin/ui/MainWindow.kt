@@ -14,13 +14,17 @@ class MainWindow {
 
     init {
         mainFrame.defaultCloseOperation = JFrame.EXIT_ON_CLOSE
-        mainFrame.layout = FlowLayout()
+        val layout = BorderLayout()
 
         val networkView = NetworkView()
         mainFrame.contentPane.add(networkView)
+        layout.addLayoutComponent(networkView, BorderLayout.CENTER)
 
         val connectButton = JButton("Connect")
         mainFrame.contentPane.add(connectButton)
+        layout.addLayoutComponent(connectButton, BorderLayout.SOUTH)
+
+        mainFrame.contentPane.layout = layout
 
         // Setup the network
         network.addUpdateListener(networkView)
