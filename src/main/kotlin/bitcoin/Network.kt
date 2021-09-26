@@ -16,8 +16,19 @@ import kotlin.math.floor
 import kotlin.random.Random
 
 class Network: IMessageProcessor {
-    val port: Short = 18333                                                                 //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
+    val activeConnectionAddresses: List<NetworkAddress>
+        get() {
+            val retList = mutableListOf<NetworkAddress>()
+            synchronized(activeConnections) {
+                for (connection in activeConnections) {
+                    retList.add(connection.addr)
+                }
+            }
+            return retList
+        }
+    val updateListeners = mutableListOf<IUpdateListener>()
 
+    private val port: Short = 18333                                                                 //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
     private val defaultSeedAddresses = listOf(
         "testnet-seed.bluematt.me",
         "seed.testnet.bitcoin.sprovoost.nl",
@@ -28,6 +39,10 @@ class Network: IMessageProcessor {
     private val activePeers = mutableMapOf<NetworkAddress, ZonedDateTime>()
     private var isConnected = AtomicBoolean(false)
     private val numConnectionsBeingCreated = AtomicInteger(0)
+
+    fun addUpdateListener(newListener: IUpdateListener) {
+        updateListeners.add(newListener)
+    }
 
     fun connect() {
         if (isConnected.getAndSet(true)) return
@@ -86,6 +101,8 @@ class Network: IMessageProcessor {
         synchronized(activePeers) {
             activePeers.remove(connectionToRemove.address)
         }
+
+        notifyListenersOfUpdate()
     }
 
     private fun cleanOutBadConnections() {
@@ -107,6 +124,7 @@ class Network: IMessageProcessor {
             }
             connectionToClose?.close()
         }
+        establishNewRandomConnection()
     }
 
     private fun establishNewRandomConnection() {
@@ -154,17 +172,28 @@ class Network: IMessageProcessor {
                         }
                     }
                 }
+                notifyListenersOfUpdate()
             }
         } finally {
             numConnectionsBeingCreated.decrementAndGet()
         }
     }
 
+    private fun notifyListenersOfUpdate() {
+        for (listener in updateListeners) {
+            listener.networkUpdated(this)
+        }
+    }
+
     companion object {
-        private const val maxActiveConnections = 1
+        private const val maxActiveConnections = 2
         private const val cleanOutDelayMilliseconds = 60 * 1000L
         private const val pruneDelayMilliseconds = 60 * 5 * 1000L
         private const val maxPeerAgeSeconds = 60 * 60 * 3             //https://en.bitcoin.it/wiki/Protocol_documentation#getaddr
         private const val prunePercentage = 0.1
+    }
+
+    interface IUpdateListener {
+        fun networkUpdated(network: Network)
     }
 }
