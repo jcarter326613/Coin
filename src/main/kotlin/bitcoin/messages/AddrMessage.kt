@@ -1,11 +1,7 @@
 package bitcoin.messages
 
-import bitcoin.Network
 import bitcoin.messages.components.NetworkAddress
 import bitcoin.messages.components.VariableInt
-import bitcoin.messages.components.VariableString
-import util.ByteManipulation
-import java.nio.ByteOrder
 
 data class AddrMessage(
     val entries: List<NetworkAddress>
@@ -34,9 +30,9 @@ data class AddrMessage(
     companion object {
         fun fromByteArray(buffer: ByteArray): AddrMessage {
             val size = VariableInt.fromByteArray(buffer, 0)
-            var currentOffset = size.calculateMessageSize()
+            var currentOffset = size.index
             val addressList = mutableListOf<NetworkAddress>()
-            for (i in 1..size.value) {
+            for (i in 1..size.value.value) {
                 val item = NetworkAddress.fromByteArray(buffer, currentOffset, true)
                 currentOffset += item.calculateMessageSize(includeTime = true)
                 addressList.add(item)

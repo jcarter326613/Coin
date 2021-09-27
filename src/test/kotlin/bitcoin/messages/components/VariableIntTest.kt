@@ -16,6 +16,6 @@ class VariableIntTest {
         assert(a[4] == 0x07.toByte())
 
         val i2 = VariableInt.fromByteArray(a, 0)
-        assert(i2.value == i.value)
+        assert(i2.value.value == i.value)
     }
 }

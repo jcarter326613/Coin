@@ -1,6 +1,6 @@
 package bitcoin.messages
 
-import bitcoin.Connection
+import bitcoin.network.Connection
 import util.ByteManipulation
 import util.Log
 import java.nio.ByteBuffer

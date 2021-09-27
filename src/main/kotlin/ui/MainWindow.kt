@@ -1,10 +1,8 @@
 package ui
 
-import bitcoin.Network
+import bitcoin.network.Network
 import ui.bitcoin.NetworkView
 import java.awt.BorderLayout
-import java.awt.FlowLayout
-import java.awt.Toolkit
 import javax.swing.JButton
 import javax.swing.JFrame
 

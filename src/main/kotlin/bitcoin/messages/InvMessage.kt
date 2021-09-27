@@ -40,8 +40,8 @@ class InvMessage(
     companion object {
         fun fromByteArray(buffer: ByteArray): InvMessage {
             val numItemsInfo = VariableInt.fromByteArray(buffer, 0)
-            var currentOffset = numItemsInfo.calculateMessageSize()
-            val numItems = numItemsInfo.value
+            var currentOffset = numItemsInfo.index
+            val numItems = numItemsInfo.value.value
 
             val transactionHashes = mutableListOf<ByteArray>()
             val dataBlockHashes = mutableListOf<ByteArray>()

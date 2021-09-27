@@ -1,4 +1,4 @@
-package bitcoin
+package bitcoin.chain
 
 class BlockDb private constructor() {
     val lastBlock = 0

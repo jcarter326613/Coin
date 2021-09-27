@@ -45,23 +45,33 @@ data class VariableInt(
     }
 
     companion object {
-        fun fromByteArray(buffer: ByteArray, startIndex: Int): VariableInt {
+        fun fromByteArray(buffer: ByteArray, startIndex: Int): ValueIndexPair {
             val leadingByte = buffer[startIndex]
+            val numBytes: Int
             val value = when (leadingByte) {
                 0xFD.toByte() -> {
+                    numBytes = 3
                     ByteManipulation.readShortFromArray(buffer, startIndex + 1).value
                 }
                 0xFE.toByte() -> {
+                    numBytes = 5
                     ByteManipulation.readIntFromArray(buffer, startIndex + 1).value
                 }
                 0xFF.toByte() -> {
+                    numBytes = 9
                     ByteManipulation.readLongFromArray(buffer, startIndex + 1).value
                 }
                 else -> {
+                    numBytes = 1
                     leadingByte.toLong()
                 }
             }.toLong()
-            return VariableInt(value)
+            return ValueIndexPair(VariableInt(value), startIndex + numBytes)
         }
     }
+
+    data class ValueIndexPair(
+        val value: VariableInt,
+        val index: Int
+    )
 }

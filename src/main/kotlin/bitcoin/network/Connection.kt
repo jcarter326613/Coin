@@ -1,5 +1,6 @@
-package bitcoin
+package bitcoin.network
 
+import bitcoin.chain.BlockDb
 import bitcoin.messages.*
 import bitcoin.messages.components.NetworkAddress
 import bitcoin.messages.components.NetworkAddress.Companion.convertAddressToByteArray
@@ -9,11 +10,8 @@ import kotlinx.coroutines.*
 import util.Log
 import java.io.InputStream
 import java.io.OutputStream
-import java.net.Inet6Address
-import java.net.InetAddress
 import java.net.Socket
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.time.ZonedDateTime
 import kotlin.random.Random

@@ -1,10 +1,8 @@
 package bitcoin.messages.components
 
-import bitcoin.Connection
 import util.ByteManipulation
 import java.net.Inet6Address
 import java.net.InetAddress
-import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.ZonedDateTime
 

@@ -1,15 +1,13 @@
-package bitcoin
+package bitcoin.network
 
 import bitcoin.messages.AddrMessage
 import bitcoin.messages.InvMessage
-import bitcoin.messages.MessageHeader
 import bitcoin.messages.VersionMessage
 import bitcoin.messages.components.NetworkAddress
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import util.Log
-import java.nio.ByteBuffer
 import java.time.ZonedDateTime
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -120,7 +118,7 @@ class Network: IMessageProcessor {
     }
 
     private fun pruneConnections() {
-        val targetNumConnections = floor(maxActiveConnections * (1-prunePercentage))
+        val targetNumConnections = floor(maxActiveConnections * (1- prunePercentage))
         while (activeConnections.size > targetNumConnections) {
             var connectionToClose: Connection?
             synchronized(activeConnections) {

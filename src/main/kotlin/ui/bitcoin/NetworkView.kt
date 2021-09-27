@@ -1,6 +1,6 @@
 package ui.bitcoin
 
-import bitcoin.Network
+import bitcoin.network.Network
 import bitcoin.messages.components.NetworkAddress
 import java.awt.BorderLayout
 import java.awt.Dimension

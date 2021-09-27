@@ -1,8 +1,7 @@
-package bitcoin
+package bitcoin.network
 
 import bitcoin.messages.AddrMessage
 import bitcoin.messages.InvMessage
-import bitcoin.messages.MessageHeader
 import bitcoin.messages.VersionMessage
 
 interface IMessageProcessor {

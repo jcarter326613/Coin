@@ -14,14 +14,14 @@ data class VariableString (
 
     companion object {
         fun fromByteArray(buffer: ByteArray, startIndex: Int): VariableString {
-            val length = VariableInt.fromByteArray(buffer, startIndex)
-            val lengthMessageSize = length.calculateMessageSize()
+            val varIntPair = VariableInt.fromByteArray(buffer, startIndex)
+            val length = varIntPair.value
 
             if (length.value >= Int.MAX_VALUE || length.value < 0) {
                 throw Exception("Invalid string length ${length.value}")
             }
 
-            val s = String(buffer.slice((startIndex + lengthMessageSize) until (startIndex + lengthMessageSize + length.value.toInt())).toByteArray())
+            val s = String(buffer.slice(varIntPair.index until (varIntPair.index + length.value.toInt())).toByteArray())
             return VariableString(s)
         }
     }
