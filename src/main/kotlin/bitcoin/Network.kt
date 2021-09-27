@@ -1,6 +1,7 @@
 package bitcoin
 
 import bitcoin.messages.AddrMessage
+import bitcoin.messages.InvMessage
 import bitcoin.messages.MessageHeader
 import bitcoin.messages.VersionMessage
 import bitcoin.messages.components.NetworkAddress
@@ -91,6 +92,10 @@ class Network: IMessageProcessor {
         }
 
         establishNewRandomConnection()
+    }
+
+    override fun processIncomingMessageInv(payload: InvMessage, connection: Connection) {
+
     }
 
     private fun removeActiveConnection(connectionToRemove: Connection) {

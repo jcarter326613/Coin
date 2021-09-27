@@ -161,6 +161,7 @@ class Connection(
             "ping" -> processIncomingPing(PingMessage.fromByteArray(payload))
             "pong" -> processIncomingPong(PongMessage.fromByteArray(payload))
             "addr" -> messageProcessor.processIncomingMessageAddr(AddrMessage.fromByteArray(payload), this)
+            "inv" -> messageProcessor.processIncomingMessageInv(InvMessage.fromByteArray(payload), this)
             else -> Log.info("Received command ${header.command} but don't know how to process")
         }
     }
