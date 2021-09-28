@@ -2,6 +2,7 @@ package bitcoin.network
 
 import bitcoin.messages.AddrMessage
 import bitcoin.messages.InvMessage
+import bitcoin.messages.RejectMessage
 import bitcoin.messages.VersionMessage
 import bitcoin.messages.components.NetworkAddress
 import kotlinx.coroutines.GlobalScope
@@ -94,6 +95,10 @@ class Network: IMessageProcessor {
 
     override fun processIncomingMessageInv(payload: InvMessage, connection: Connection) {
 
+    }
+
+    override fun processIncomingMessageReject(payload: RejectMessage, connection: Connection) {
+        Log.error("Connection ${connection.addr} returned rejection\n\tMessage: ${payload.message}\n\tCode: ${payload.code}\n\tReason: ${payload.reason}")
     }
 
     private fun removeActiveConnection(connectionToRemove: Connection) {

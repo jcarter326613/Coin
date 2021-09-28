@@ -160,6 +160,7 @@ class Connection(
             "pong" -> processIncomingPong(PongMessage.fromByteArray(payload))
             "addr" -> messageProcessor.processIncomingMessageAddr(AddrMessage.fromByteArray(payload), this)
             "inv" -> messageProcessor.processIncomingMessageInv(InvMessage.fromByteArray(payload), this)
+            "reject" -> messageProcessor.processIncomingMessageReject(RejectMessage.fromByteArray(payload), this)
             else -> Log.info("Received command ${header.command} but don't know how to process")
         }
     }

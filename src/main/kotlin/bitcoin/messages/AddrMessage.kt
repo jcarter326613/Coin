@@ -30,7 +30,7 @@ data class AddrMessage(
     companion object {
         fun fromByteArray(buffer: ByteArray): AddrMessage {
             val size = VariableInt.fromByteArray(buffer, 0)
-            var currentOffset = size.index
+            var currentOffset = size.nextIndex
             val addressList = mutableListOf<NetworkAddress>()
             for (i in 1..size.value.value) {
                 val item = NetworkAddress.fromByteArray(buffer, currentOffset, true)

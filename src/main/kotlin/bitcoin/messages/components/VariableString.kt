@@ -13,7 +13,7 @@ data class VariableString (
     fun calculateMessageSize(): Int = VariableInt(s.length.toLong()).calculateMessageSize() + s.length
 
     companion object {
-        fun fromByteArray(buffer: ByteArray, startIndex: Int): VariableString {
+        fun fromByteArray(buffer: ByteArray, startIndex: Int): ValueIndexPair {
             val varIntPair = VariableInt.fromByteArray(buffer, startIndex)
             val length = varIntPair.value
 
@@ -21,8 +21,13 @@ data class VariableString (
                 throw Exception("Invalid string length ${length.value}")
             }
 
-            val s = String(buffer.slice(varIntPair.index until (varIntPair.index + length.value.toInt())).toByteArray())
-            return VariableString(s)
+            val s = String(buffer.slice(varIntPair.nextIndex until (varIntPair.nextIndex + length.value.toInt())).toByteArray())
+            return ValueIndexPair(VariableString(s), varIntPair.nextIndex + length.value.toInt())
         }
     }
+
+    data class ValueIndexPair(
+        val value: VariableString,
+        val nextIndex: Int
+    )
 }

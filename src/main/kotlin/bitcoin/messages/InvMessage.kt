@@ -1,10 +1,7 @@
 package bitcoin.messages
 
-import bitcoin.messages.components.NetworkAddress
 import bitcoin.messages.components.VariableInt
-import bitcoin.messages.components.VariableString
 import util.ByteManipulation
-import java.nio.ByteOrder
 
 class InvMessage(
     val transactionHashes: List<ByteArray>,
@@ -40,7 +37,7 @@ class InvMessage(
     companion object {
         fun fromByteArray(buffer: ByteArray): InvMessage {
             val numItemsInfo = VariableInt.fromByteArray(buffer, 0)
-            var currentOffset = numItemsInfo.index
+            var currentOffset = numItemsInfo.nextIndex
             val numItems = numItemsInfo.value.value
 
             val transactionHashes = mutableListOf<ByteArray>()

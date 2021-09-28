@@ -57,19 +57,6 @@ data class NetworkAddress(
     }
 
     override fun toString(): String {
-        /*
-        var retVal = ""
-        for (i in address) {
-            if (retVal.isNotEmpty()) {
-                retVal += " "
-            }
-            retVal += Integer.toHexString(i.toUByte().toInt())
-        }
-
-        return retVal
-
-         */
-
         return "${convertByteArrayToAddress(address)} ($port)"
     }
 

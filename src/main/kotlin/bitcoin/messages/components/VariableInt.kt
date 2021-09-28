@@ -72,6 +72,6 @@ data class VariableInt(
 
     data class ValueIndexPair(
         val value: VariableInt,
-        val index: Int
+        val nextIndex: Int
     )
 }

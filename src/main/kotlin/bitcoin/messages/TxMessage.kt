@@ -48,7 +48,7 @@ class TxMessage(
 
             val txInList = mutableListOf<TxIn>()
             val numTxIn = VariableInt.fromByteArray(buffer, version.nextIndex)
-            var currentOffset = numTxIn.index
+            var currentOffset = numTxIn.nextIndex
             for (i in 1..numTxIn.value.value) {
                 val txInPair = TxIn.fromByteArray(buffer, currentOffset)
                 txInList.add(txInPair.value)
@@ -57,7 +57,7 @@ class TxMessage(
 
             val txOutList = mutableListOf<TxOut>()
             val numTxOut = VariableInt.fromByteArray(buffer, currentOffset)
-            currentOffset = numTxOut.index
+            currentOffset = numTxOut.nextIndex
             for (i in 1..numTxOut.value.value) {
                 val txOutPair = TxOut.fromByteArray(buffer, currentOffset)
                 txOutList.add(txOutPair.value)
@@ -102,8 +102,8 @@ class TxMessage(
                 val previousOutput = OutPoint.fromByteArray(buffer, startIndex)
                 val scriptLength = VariableInt.fromByteArray(buffer, previousOutput.index)
                 val script = ByteArray(scriptLength.value.value.toInt())
-                val scriptEndIndex = scriptLength.index + script.size
-                buffer.copyInto(script, 0, scriptLength.index, scriptEndIndex)
+                val scriptEndIndex = scriptLength.nextIndex + script.size
+                buffer.copyInto(script, 0, scriptLength.nextIndex, scriptEndIndex)
                 val sequence = ByteManipulation.readIntFromArray(buffer, scriptEndIndex)
 
                 return TxInPair(
@@ -171,8 +171,8 @@ class TxMessage(
                 val value = ByteManipulation.readLongFromArray(buffer, startIndex)
                 val scriptLength = VariableInt.fromByteArray(buffer, value.nextIndex)
                 val script = ByteArray(scriptLength.value.value.toInt())
-                val scriptEndIndex = scriptLength.index + scriptLength.value.value.toInt()
-                buffer.copyInto(script, 0, scriptLength.index, scriptEndIndex)
+                val scriptEndIndex = scriptLength.nextIndex + scriptLength.value.value.toInt()
+                buffer.copyInto(script, 0, scriptLength.nextIndex, scriptEndIndex)
 
                 return TxOutPair(
                     TxOut(value.value, script),

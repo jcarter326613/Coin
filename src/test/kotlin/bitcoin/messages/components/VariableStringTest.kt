@@ -10,6 +10,6 @@ class VariableStringTest {
 
         i.intoByteArray(a, 0)
         val iOut = VariableString.fromByteArray(a, 0)
-        assert(i.s == iOut.s)
+        assert(i.s == iOut.value.s)
     }
 }

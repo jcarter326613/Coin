@@ -53,8 +53,7 @@ data class VersionMessage(
             val sourceAddressBytes = sourceAddress.calculateMessageSize(false)
             val nonce = ByteManipulation.readLongFromArray(buffer, timestamp.nextIndex + targetAddressBytes + sourceAddressBytes, ByteOrder.LITTLE_ENDIAN)
             val userAgent = VariableString.fromByteArray(buffer, nonce.nextIndex)
-            val userAgentBytes = userAgent.calculateMessageSize()
-            val startHeight = ByteManipulation.readIntFromArray(buffer, nonce.nextIndex + userAgentBytes, ByteOrder.LITTLE_ENDIAN)
+            val startHeight = ByteManipulation.readIntFromArray(buffer, userAgent.nextIndex, ByteOrder.LITTLE_ENDIAN)
             val relay: Boolean = buffer[startHeight.nextIndex] != 0.toByte()
 
             return VersionMessage(
@@ -64,7 +63,7 @@ data class VersionMessage(
                 targetAddress = targetAddress,
                 sourceAddress = sourceAddress,
                 nonce = nonce.value,
-                userAgent = userAgent,
+                userAgent = userAgent.value,
                 startHeight = startHeight.value,
                 relay = relay
             )
