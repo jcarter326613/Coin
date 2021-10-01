@@ -46,8 +46,8 @@ class BlockMessage(
     companion object {
         fun fromByteArray(buffer: ByteArray): BlockMessage {
             val version = ByteManipulation.readIntFromArray(buffer, 0)
-            val previousBlockHash = buffer.slice(version.nextIndex..(version.nextIndex + 32)).toByteArray()
-            val merkleRootHash = buffer.slice((version.nextIndex + 32)..(version.nextIndex + 32 * 2)).toByteArray()
+            val previousBlockHash = buffer.slice(version.nextIndex until (version.nextIndex + 32)).toByteArray()
+            val merkleRootHash = buffer.slice((version.nextIndex + 32) until (version.nextIndex + 32 * 2)).toByteArray()
 
             val timestamp = ByteManipulation.readIntFromArray(buffer, version.nextIndex + 32 * 2)
             val difficultyTarget = ByteManipulation.readIntFromArray(buffer, timestamp.nextIndex)
@@ -68,7 +68,7 @@ class BlockMessage(
                 merkleRootHash = merkleRootHash,
                 timestamp = timestamp.value,
                 difficultyTarget = difficultyTarget.value,
-                nonce = difficultyTarget.value,
+                nonce = nonce.value,
                 transactions = transactions
             )
         }
