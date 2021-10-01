@@ -1,6 +1,7 @@
 package bitcoin.messages
 
 import bitcoin.messages.components.VariableInt
+import bitcoin.messages.components.VariableString
 import util.ByteManipulation
 
 class TxMessage(
@@ -11,7 +12,12 @@ class TxMessage(
 ) {
     fun toByteArray(): ByteArray {
         val array = ByteArray(calculateMessageSize())
-        var currentOffset = 0
+        intoByteArray(array, 0)
+        return array
+    }
+
+    fun intoByteArray(array: ByteArray, index: Int): Int {
+        var currentOffset = index
 
         currentOffset = ByteManipulation.writeIntToArray(version, array, currentOffset)
         currentOffset = VariableInt(inputs.size.toLong()).intoByteArray(array, currentOffset)
@@ -22,9 +28,7 @@ class TxMessage(
         for (output in outputs) {
             currentOffset = output.intoByteArray(array, currentOffset)
         }
-        ByteManipulation.writeIntToArray(locktime, array, currentOffset)
-
-        return array
+        return ByteManipulation.writeIntToArray(locktime, array, currentOffset)
     }
 
     fun calculateMessageSize(): Int {
@@ -43,12 +47,13 @@ class TxMessage(
     }
 
     companion object {
-        fun fromByteArray(buffer: ByteArray): TxMessage {
-            val version = ByteManipulation.readIntFromArray(buffer, 0)
+        fun fromByteArray(buffer: ByteArray, offset: Int = 0): ValueIndexPair {
+            var currentOffset = offset
+            val version = ByteManipulation.readIntFromArray(buffer, currentOffset)
 
             val txInList = mutableListOf<TxIn>()
             val numTxIn = VariableInt.fromByteArray(buffer, version.nextIndex)
-            var currentOffset = numTxIn.nextIndex
+            currentOffset = numTxIn.nextIndex
             for (i in 1..numTxIn.value.value) {
                 val txInPair = TxIn.fromByteArray(buffer, currentOffset)
                 txInList.add(txInPair.value)
@@ -66,11 +71,14 @@ class TxMessage(
 
             val locktime = ByteManipulation.readIntFromArray(buffer, currentOffset)
 
-            return TxMessage(
-                version = version.value,
-                inputs = txInList,
-                outputs = txOutList,
-                locktime = locktime.value
+            return ValueIndexPair(
+                TxMessage(
+                    version = version.value,
+                    inputs = txInList,
+                    outputs = txOutList,
+                    locktime = locktime.value
+                ),
+                locktime.nextIndex
             )
         }
     }
@@ -186,4 +194,9 @@ class TxMessage(
             val index: Int
         )
     }
+
+    data class ValueIndexPair(
+        val value: TxMessage,
+        val nextIndex: Int
+    )
 }
