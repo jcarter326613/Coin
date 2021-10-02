@@ -26,6 +26,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.5.30")
     implementation("org.ejml:ejml-all:0.41")
+    implementation("org.apache.directory.jdbm:apacheds-jdbm2:2.0.0-M3")
 
     testImplementation(kotlin("test-junit5"))
     testImplementation(platform("org.junit:junit-bom:5.7.1"))

@@ -14,7 +14,7 @@ class InvMessageTest {
 
         val message = InvMessage(
             transactionHashes = listOf(hash1, hash2, hash3),
-            dataBlockHashes = listOf(hash4, hash5)
+            blockHashes = listOf(hash4, hash5)
         )
         val messageByteArray = message.toByteArray()
         val outMessage = InvMessage.fromByteArray(messageByteArray)
@@ -22,8 +22,8 @@ class InvMessageTest {
         assert(outMessage.transactionHashes[0].contentEquals(hash1))
         assert(outMessage.transactionHashes[1].contentEquals(hash2))
         assert(outMessage.transactionHashes[2].contentEquals(hash3))
-        assert(outMessage.dataBlockHashes[0].contentEquals(hash4))
-        assert(outMessage.dataBlockHashes[1].contentEquals(hash5))
+        assert(outMessage.blockHashes[0].contentEquals(hash4))
+        assert(outMessage.blockHashes[1].contentEquals(hash5))
     }
 
     private fun createRandomHash(): ByteArray = Random.Default.nextBytes(32)

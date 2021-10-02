@@ -252,7 +252,7 @@ class Connection(
             sourceAddress = NetworkAddress(convertAddressToByteArray("0.0.0.0"), 0, NetworkAddress.serviceFlagsNetwork),
             nonce = Random.nextLong(),
             userAgent = VariableString(""),
-            startHeight = BlockDb.instance.lastBlock,
+            startHeight = BlockDb.instance.lastBlockHeight,
             relay = true
         )
 

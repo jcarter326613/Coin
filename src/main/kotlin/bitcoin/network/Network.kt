@@ -1,9 +1,8 @@
 package bitcoin.network
 
-import bitcoin.messages.AddrMessage
-import bitcoin.messages.InvMessage
-import bitcoin.messages.RejectMessage
-import bitcoin.messages.VersionMessage
+import bitcoin.chain.Block
+import bitcoin.chain.BlockDb
+import bitcoin.messages.*
 import bitcoin.messages.components.NetworkAddress
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -94,11 +93,35 @@ class Network: IMessageProcessor {
     }
 
     override fun processIncomingMessageInv(payload: InvMessage, connection: Connection) {
+        val blockDb = BlockDb.instance
+        val listToRequest = mutableListOf<ByteArray>()
+        for (blockHash in payload.blockHashes) {
+            if (blockDb.getBlock(blockHash) == null) {
+                listToRequest.add(blockHash)
+            }
+        }
 
+        if (listToRequest.size > 0) {
+            val getMessage = GetDataMessage(
+                version = Connection.minimumProtocolVersion,
+                blockHashes = listToRequest
+            )
+        }
     }
 
     override fun processIncomingMessageReject(payload: RejectMessage, connection: Connection) {
         Log.error("Connection ${connection.addr} returned rejection\n\tMessage: ${payload.message}\n\tCode: ${payload.code}\n\tReason: ${payload.reason}")
+    }
+
+    override fun processIncomingMessageBlock(payload: BlockMessage, connection: Connection) {
+        val db = BlockDb.instance
+        val previousBlock = db.getBlock(payload.previousBlockHash)
+        if (previousBlock.nextBlockHash != null) {
+            throw Exception("Next block is already set")
+        }
+        val newBlock = Block.fromMessage(payload)
+        previousBlock.nextBlockHash = newBlock.hash
+        BlockDb.instance.addBlock(newBlock)
     }
 
     private fun removeActiveConnection(connectionToRemove: Connection) {

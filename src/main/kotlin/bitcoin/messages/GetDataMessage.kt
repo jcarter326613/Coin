@@ -3,9 +3,10 @@ package bitcoin.messages
 import bitcoin.messages.components.VariableInt
 import util.ByteManipulation
 
-class InvMessage(
-    val transactionHashes: List<ByteArray>,
-    val blockHashes: List<ByteArray>
+class GetDataMessage(
+    val version: Int,
+    val transactionHashes: List<ByteArray>? = null,
+    val blockHashes: List<ByteArray>? = null
 ) {
     fun toByteArray(): ByteArray {
         val array = ByteArray(calculateMessageSize())
