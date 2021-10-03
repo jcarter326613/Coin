@@ -7,34 +7,35 @@ import kotlinx.coroutines.processNextEventInCurrentThread
 import java.security.MessageDigest
 
 class Block(
-    val version: Int,
-    val previousBlockHash: ByteArray,
+    val message: BlockMessage,
     var nextBlockHash: ByteArray? = null,
-    val merkleRootHash: ByteArray,
-    val timestamp: Int,
-    val difficultyTarget: Int,
-    val nonce: Int,
-    val transactions: List<TxMessage>,
-    val memorySize: Int,
     height: Int? = null,
     hash: ByteArray? = null,
 ) {
+    private var _memorySize: Int? = null
+    val memorySize: Int
+        get() {
+            var memorySize = _memorySize
+            if (memorySize == null) {
+                memorySize = message.calculateMessageSize()
+                memorySize += (nextBlockHash?.let {it.size} ?: 0) + 1
+                memorySize += 4    // Height int
+                _memorySize = memorySize
+            }
+            return memorySize
+        }
+
+    val previousBlockHash: ByteArray get() = message.previousBlockHash
+
     private var _hash: ByteArray? = hash
     val hash: ByteArray
         get() {
             var hash = _hash
             if (hash == null) {
                 val hasher = MessageDigest.getInstance("SHA-256")
-                val header = BlockHeaderMessage(
-                    version = version,
-                    previousBlockHash = previousBlockHash,
-                    merkleRootHash = merkleRootHash,
-                    timestamp = timestamp,
-                    difficultyTarget = difficultyTarget,
-                    nonce = nonce
-                )
+                val header = message.toBlockHeaderMessage()
                 val messageHeaderBytes = header.toByteArray()
-                hash = hasher.digest(messageHeaderBytes.sliceArray(0 until (messageHeaderBytes.size - 1)))
+                hash = hasher.digest(hasher.digest(messageHeaderBytes.sliceArray(0 until (messageHeaderBytes.size - 1))))
                 _hash = hash
                 return hash
             }
@@ -46,7 +47,7 @@ class Block(
         get() {
             var height = _height
             if (height == null) {
-                val previousBlock = BlockDb.instance.getBlock(previousBlockHash) ?: throw Exception("Could not retrieve previous block")
+                val previousBlock = BlockDb.instance.getBlock(message.previousBlockHash) ?: throw Exception("Could not retrieve previous block")
                 height = previousBlock.height + 1
                 _height = height
                 return height
@@ -55,23 +56,14 @@ class Block(
         }
 
     init {
-        if (transactions.isEmpty()) {
+        if (message.transactions.isEmpty()) {
             throw Exception("Invalid number of transactions in block")
         }
     }
 
     companion object {
         fun fromMessage(message: BlockMessage): Block {
-            return Block(
-                version = message.version,
-                previousBlockHash = message.previousBlockHash,
-                merkleRootHash = message.merkleRootHash,
-                timestamp = message.timestamp,
-                difficultyTarget = message.difficultyTarget,
-                nonce = message.nonce,
-                transactions = message.transactions,
-                memorySize = message.calculateMessageSize()
-            )
+            return Block(message = message)
         }
     }
 }

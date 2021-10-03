@@ -17,8 +17,10 @@ data class VersionMessage(
     val userAgent: VariableString,
     val startHeight: Int,
     val relay: Boolean
-) {
-    fun toByteArray(): ByteArray {
+): IMessage {
+    override val name: String = "version"
+
+    override fun toByteArray(): ByteArray {
         val array = ByteArray(calculateMessageSize())
         var currentOffset = 0
 

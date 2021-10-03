@@ -103,6 +103,10 @@ class Connection(
         outputStream.flush()
     }
 
+    fun sendMessage(message: IMessage) {
+        sendMessageBytes(message.name, message.toByteArray())
+    }
+
     private fun startStreamReader() {
         GlobalScope.launch(Dispatchers.IO) {
             try {
@@ -161,6 +165,7 @@ class Connection(
             "addr" -> messageProcessor.processIncomingMessageAddr(AddrMessage.fromByteArray(payload), this)
             "inv" -> messageProcessor.processIncomingMessageInv(InvMessage.fromByteArray(payload), this)
             "reject" -> messageProcessor.processIncomingMessageReject(RejectMessage.fromByteArray(payload), this)
+            "block" -> messageProcessor.processIncomingMessageBlock(BlockMessage.fromByteArray(payload), this)
             else -> Log.info("Received command ${header.command} but don't know how to process")
         }
     }
@@ -177,7 +182,7 @@ class Connection(
                 } ?: millisecondsBetweenPing
                 val nextWaitTime = if (elapsedTimeSinceLastMessage >= millisecondsBetweenPing) {
                     val lastPingNonce = Random.nextLong()
-                    sendMessage("ping", PingMessage(lastPingNonce).toByteArray())
+                    sendMessageBytes("ping", PingMessage(lastPingNonce).toByteArray())
                     this@Connection.lastPingNonce = lastPingNonce
                     millisecondsBetweenPing
                 } else {
@@ -190,7 +195,7 @@ class Connection(
 
     private fun processIncomingPing(message: PingMessage) {
         val toSend = PongMessage(nonce = message.nonce)
-        sendMessage("pong", toSend.toByteArray())
+        sendMessageBytes("pong", toSend.toByteArray())
     }
 
     private fun processIncomingPong(message: PongMessage) {
@@ -255,12 +260,10 @@ class Connection(
             startHeight = BlockDb.instance.lastBlockHeight,
             relay = true
         )
-
-        val messageByteArray = message.toByteArray()
-        sendMessage("version", messageByteArray)
+        sendMessage(message)
     }
 
-    private fun sendMessage(command: String, message: ByteArray) {
+    private fun sendMessageBytes(command: String, message: ByteArray) {
         val messageChecksum = calculateHeaderChecksum(message)
 
         val header = MessageHeader(

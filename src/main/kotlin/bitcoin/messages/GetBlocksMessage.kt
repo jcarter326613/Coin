@@ -7,8 +7,10 @@ class GetBlocksMessage(
     val version: Int,
     val locatorHashes: List<ByteArray>,
     val hashStop: ByteArray
-) {
-    fun toByteArray(): ByteArray {
+): IMessage {
+    override val name: String = "getblocks"
+
+    override fun toByteArray(): ByteArray {
         val array = ByteArray(calculateMessageSize())
         var currentOffset = 0
 

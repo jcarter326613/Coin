@@ -4,15 +4,16 @@ import bitcoin.messages.components.VariableInt
 import util.ByteManipulation
 
 class GetDataMessage(
-    val version: Int,
-    val transactionHashes: List<ByteArray>? = null,
-    val blockHashes: List<ByteArray>? = null
-) {
-    fun toByteArray(): ByteArray {
+    val transactionHashes: List<ByteArray> = mutableListOf(),
+    val blockHashes: List<ByteArray> = mutableListOf()
+): IMessage {
+    override val name: String = "getdata"
+
+    override fun toByteArray(): ByteArray {
         val array = ByteArray(calculateMessageSize())
         var currentOffset = 0
 
-        currentOffset = VariableInt(transactionHashes.size + blockHashes.size.toLong()).intoByteArray(array, currentOffset)
+        currentOffset = VariableInt((transactionHashes.size + blockHashes.size).toLong()).intoByteArray(array, currentOffset)
 
         for (hash in transactionHashes) {
             currentOffset = ByteManipulation.writeIntToArray(1, array, currentOffset)
@@ -36,7 +37,7 @@ class GetDataMessage(
     }
 
     companion object {
-        fun fromByteArray(buffer: ByteArray): InvMessage {
+        fun fromByteArray(buffer: ByteArray): GetDataMessage {
             val numItemsInfo = VariableInt.fromByteArray(buffer, 0)
             var currentOffset = numItemsInfo.nextIndex
             val numItems = numItemsInfo.value.value
@@ -62,7 +63,7 @@ class GetDataMessage(
                 currentOffset += 32
             }
 
-            return InvMessage(
+            return GetDataMessage(
                 transactionHashes = transactionHashes,
                 blockHashes = dataBlockHashes
             )

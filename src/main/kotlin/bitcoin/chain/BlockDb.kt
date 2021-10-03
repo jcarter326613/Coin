@@ -2,6 +2,7 @@ package bitcoin.chain
 
 import storage.IStorage
 import storage.LocalStorage
+import java.lang.Integer.max
 
 /**
  * Responsible for representing the full active block chain.  As the chain grows, new blocks are added using the
@@ -10,7 +11,30 @@ import storage.LocalStorage
  * higher blocks.
  */
 class BlockDb private constructor(private val storageController: IStorage) {
-    val lastBlockHeight: Int = 0
+    var lastBlockHeight: Int = 0
+        private set
+
+    private var _locatorHashes: MutableList<ByteArray>? = null
+    val locatorHashes: List<ByteArray>
+        get() {
+            var locatorHashes = _locatorHashes
+            if (locatorHashes == null) {
+                locatorHashes = mutableListOf()
+                val minConsecutiveIndex = max(inMemoryBlocks.size - 10, 0)
+                for (i in (inMemoryBlocks.size - 1) downTo minConsecutiveIndex) {
+                    locatorHashes.add(inMemoryBlocks[i].hash)
+                }
+                var step = 2
+                var currentIndex = minConsecutiveIndex - step
+                while (currentIndex > 0) {
+                    locatorHashes.add(inMemoryBlocks[currentIndex].hash)
+                    step *= 2
+                    currentIndex -= step
+                }
+                _locatorHashes = locatorHashes
+            }
+            return locatorHashes
+        }
 
     private val blockMapByHash = mutableMapOf<ByteArray, Block>()
     private val inMemoryBlocks = mutableListOf<Block>()
@@ -18,12 +42,19 @@ class BlockDb private constructor(private val storageController: IStorage) {
 
     fun addBlock(block: Block) {
         synchronized(blockMapByHash) {
-            if (blockMapByHash[block.previousBlockHash] == null ||
-                !inMemoryBlocks.last().hash.contentEquals(block.previousBlockHash)) {
-                throw Exception("Can not add block when previous block is not in chain")
+            // Check that the block can be added to the chain
+            if (blockMapByHash.isNotEmpty()) {
+                if (blockMapByHash[block.previousBlockHash] == null ||
+                    !inMemoryBlocks.last().hash.contentEquals(block.previousBlockHash)
+                ) {
+                    throw Exception("Can not add block when previous block is not in chain")
+                }
             }
+
+            // Add the block to the chain
             blockMapByHash[block.hash] = block
             inMemoryBlocks.add(block)
+            lastBlockHeight++
 
             // Update the memory usage and age off the old blocks
             memorySizeUsed += block.memorySize
@@ -35,6 +66,8 @@ class BlockDb private constructor(private val storageController: IStorage) {
 
             // Add the block to storage
             //storageController.insertData(block.toByteArray(), block.hash)
+
+            _locatorHashes = null
         }
     }
 
@@ -48,13 +81,23 @@ class BlockDb private constructor(private val storageController: IStorage) {
             while (inMemoryBlocks.size > levelIndex) {
                 val toRemove = inMemoryBlocks.removeAt(levelIndex)
                 blockMapByHash.remove(toRemove.hash)
+                lastBlockHeight--
             }
+
+            _locatorHashes = null
         }
     }
 
     companion object {
-        val instance = BlockDb(LocalStorage())
+        var instance = BlockDb(LocalStorage())
+            private set
 
         private const val maxMemorySize = 10 * 1024 * 1024
+
+        fun overrideDatabase(storage: IStorage): BlockDb {
+            val instance = BlockDb(storage)
+            this.instance = instance
+            return instance
+        }
     }
 }

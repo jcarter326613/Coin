@@ -76,6 +76,14 @@ class Network: IMessageProcessor {
         if (address != null && payload.protocolVersion >= Connection.minimumProtocolVersion) {
             activePeers[address] = ZonedDateTime.now()
             connection.sendVerack()
+
+            // Request any new blocks since the most recent block in the database
+            val getBlocksMessage = GetBlocksMessage(
+                version = Connection.minimumProtocolVersion,
+                locatorHashes = BlockDb.instance.locatorHashes,
+                hashStop = ByteArray(32) {0}
+            )
+            connection.sendMessage(getBlocksMessage)
         } else {
             connection.close()
             Log.info("Connection ${connection.addr.address}(${connection.addr.port}) removed due to old version ${payload.protocolVersion} < ${Connection.minimumProtocolVersion}.")
@@ -103,9 +111,9 @@ class Network: IMessageProcessor {
 
         if (listToRequest.size > 0) {
             val getMessage = GetDataMessage(
-                version = Connection.minimumProtocolVersion,
                 blockHashes = listToRequest
             )
+            connection.sendMessage(getMessage)
         }
     }
 
@@ -116,12 +124,21 @@ class Network: IMessageProcessor {
     override fun processIncomingMessageBlock(payload: BlockMessage, connection: Connection) {
         val db = BlockDb.instance
         val previousBlock = db.getBlock(payload.previousBlockHash)
-        if (previousBlock.nextBlockHash != null) {
-            throw Exception("Next block is already set")
+        if (db.lastBlockHeight != 0 && previousBlock == null) {
+            return
         }
         val newBlock = Block.fromMessage(payload)
-        previousBlock.nextBlockHash = newBlock.hash
+        if (previousBlock?.nextBlockHash != null) {
+            if (previousBlock.nextBlockHash.contentEquals(newBlock.hash)) {
+                return
+            } else {
+                throw Exception("Next block is already set.  Need to implement branch length checking")
+            }
+        }
+
+        previousBlock?.nextBlockHash = newBlock.hash
         BlockDb.instance.addBlock(newBlock)
+        notifyListenersOfUpdate()
     }
 
     private fun removeActiveConnection(connectionToRemove: Connection) {

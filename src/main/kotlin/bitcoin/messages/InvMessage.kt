@@ -4,8 +4,8 @@ import bitcoin.messages.components.VariableInt
 import util.ByteManipulation
 
 class InvMessage(
-    val transactionHashes: List<ByteArray>,
-    val blockHashes: List<ByteArray>
+    val transactionHashes: List<ByteArray> = mutableListOf(),
+    val blockHashes: List<ByteArray> = mutableListOf()
 ) {
     fun toByteArray(): ByteArray {
         val array = ByteArray(calculateMessageSize())

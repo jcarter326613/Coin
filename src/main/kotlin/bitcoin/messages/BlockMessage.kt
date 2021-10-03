@@ -33,6 +33,17 @@ class BlockMessage(
         return array
     }
 
+    fun toBlockHeaderMessage(): BlockHeaderMessage {
+        return BlockHeaderMessage(
+            version = version,
+            previousBlockHash = previousBlockHash,
+            merkleRootHash = merkleRootHash,
+            timestamp = timestamp,
+            difficultyTarget = difficultyTarget,
+            nonce = nonce
+        )
+    }
+
     fun calculateMessageSize(): Int {
         var size = 4 + 4 + 4 + 4 + previousBlockHash.size + merkleRootHash.size +
                 VariableInt(transactions.size.toLong()).calculateMessageSize()
