@@ -20,18 +20,11 @@ class BlockDbTest {
     }
 
     @Test
-    fun addBlock_PreviousNotHead_Failure() {
+    fun addBlock_PreviousNotHead_Success() {
         val blockDb = BlockDb.overrideDatabase(NullStorage())
 
         blockDb.addBlock(Block.fromMessage(BlockMessageTest.createRandomBlock()))
-        try {
-            blockDb.addBlock(Block.fromMessage(BlockMessageTest.createRandomBlock()))
-        } catch (e: Exception) {
-            if (e.message == "Can not add block when previous block is not in chain") {
-                return
-            }
-        }
-        assert(false)
+        assert(!blockDb.addBlock(Block.fromMessage(BlockMessageTest.createRandomBlock())))
     }
 
     @Test

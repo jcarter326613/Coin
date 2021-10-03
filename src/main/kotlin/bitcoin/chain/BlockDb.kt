@@ -40,14 +40,14 @@ class BlockDb private constructor(private val storageController: IStorage) {
     private val inMemoryBlocks = mutableListOf<Block>()
     private var memorySizeUsed = 0
 
-    fun addBlock(block: Block) {
+    fun addBlock(block: Block): Boolean {
         synchronized(blockMapByHash) {
             // Check that the block can be added to the chain
             if (blockMapByHash.isNotEmpty()) {
                 if (blockMapByHash[ByteArrayWrapper(block.previousBlockHash)] == null ||
                     !inMemoryBlocks.last().hash.contentEquals(block.previousBlockHash)
                 ) {
-                    throw Exception("Can not add block when previous block is not in chain")
+                    return false
                 }
             }
 
@@ -68,6 +68,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
             //storageController.insertData(block.toByteArray(), block.hash)
 
             _locatorHashes = null
+            return true
         }
     }
 

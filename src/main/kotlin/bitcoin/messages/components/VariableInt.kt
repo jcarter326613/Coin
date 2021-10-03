@@ -63,7 +63,7 @@ data class VariableInt(
                 }
                 else -> {
                     numBytes = 1
-                    leadingByte.toLong()
+                    (leadingByte.toInt() and 0xFF).toLong()
                 }
             }.toLong()
             return ValueIndexPair(VariableInt(value), startIndex + numBytes)

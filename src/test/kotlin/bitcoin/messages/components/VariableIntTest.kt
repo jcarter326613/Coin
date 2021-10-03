@@ -18,4 +18,13 @@ class VariableIntTest {
         val i2 = VariableInt.fromByteArray(a, 0)
         assert(i2.value.value == i.value)
     }
+
+    @Test
+    fun outOfArray_DC_Success() {
+        val a = ByteArray(1)
+        a[0] = 0xDC.toByte()
+
+        val i = VariableInt.fromByteArray(a, 0)
+        assert(i.value.value.toInt() == 220)
+    }
 }
