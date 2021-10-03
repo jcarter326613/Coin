@@ -36,7 +36,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
             return locatorHashes
         }
 
-    private val blockMapByHash = mutableMapOf<ByteArray, Block>()
+    private val blockMapByHash = mutableMapOf<ByteArrayWrapper, Block>()
     private val inMemoryBlocks = mutableListOf<Block>()
     private var memorySizeUsed = 0
 
@@ -44,7 +44,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
         synchronized(blockMapByHash) {
             // Check that the block can be added to the chain
             if (blockMapByHash.isNotEmpty()) {
-                if (blockMapByHash[block.previousBlockHash] == null ||
+                if (blockMapByHash[ByteArrayWrapper(block.previousBlockHash)] == null ||
                     !inMemoryBlocks.last().hash.contentEquals(block.previousBlockHash)
                 ) {
                     throw Exception("Can not add block when previous block is not in chain")
@@ -52,7 +52,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
             }
 
             // Add the block to the chain
-            blockMapByHash[block.hash] = block
+            blockMapByHash[ByteArrayWrapper(block.hash)] = block
             inMemoryBlocks.add(block)
             lastBlockHeight++
 
@@ -61,7 +61,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
             while (memorySizeUsed > maxMemorySize) {
                 val blockToRemove = inMemoryBlocks.removeFirst()
                 memorySizeUsed -= blockToRemove.memorySize
-                blockMapByHash.remove(blockToRemove.hash)
+                blockMapByHash.remove(ByteArrayWrapper(blockToRemove.hash))
             }
 
             // Add the block to storage
@@ -72,7 +72,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
     }
 
     fun getBlock(hash: ByteArray): Block? {
-        return blockMapByHash[hash]
+        return blockMapByHash[ByteArrayWrapper(hash)]
     }
 
     fun removeBlock(block: Block) {
@@ -80,7 +80,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
             val levelIndex = inMemoryBlocks.indexOf(block)
             while (inMemoryBlocks.size > levelIndex) {
                 val toRemove = inMemoryBlocks.removeAt(levelIndex)
-                blockMapByHash.remove(toRemove.hash)
+                blockMapByHash.remove(ByteArrayWrapper(toRemove.hash))
                 lastBlockHeight--
             }
 
@@ -98,6 +98,30 @@ class BlockDb private constructor(private val storageController: IStorage) {
             val instance = BlockDb(storage)
             this.instance = instance
             return instance
+        }
+    }
+
+    private class ByteArrayWrapper(val array: ByteArray) {
+        private var _hashCode: Int? = null
+
+        override fun equals(other: Any?): Boolean {
+            if (other !is ByteArrayWrapper) {
+                return false
+            }
+            return array.contentEquals(other.array)
+        }
+
+        override fun hashCode(): Int {
+            var hashCode = _hashCode
+            if (hashCode == null) {
+                hashCode = array.contentHashCode()
+                _hashCode = hashCode
+            }
+            return hashCode
+        }
+
+        override fun toString(): String {
+            return array.toString()
         }
     }
 }
