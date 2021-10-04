@@ -26,6 +26,8 @@ class Network: IMessageProcessor {
             return retList
         }
     val updateListeners = mutableListOf<IUpdateListener>()
+    val loadingBlocks: Boolean
+        get() = ZonedDateTime.now().minusSeconds(5).isBefore(lastBlockReceived)
 
     private val port: Short = 18333                                                                 //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
     private val defaultSeedAddresses = listOf(
@@ -38,6 +40,7 @@ class Network: IMessageProcessor {
     private val activePeers = mutableMapOf<NetworkAddress, ZonedDateTime>()
     private var isConnected = AtomicBoolean(false)
     private val numConnectionsBeingCreated = AtomicInteger(0)
+    private var lastBlockReceived = ZonedDateTime.now().minusMinutes(1)
 
     fun addUpdateListener(newListener: IUpdateListener) {
         updateListeners.add(newListener)
@@ -45,6 +48,13 @@ class Network: IMessageProcessor {
 
     fun connect() {
         if (isConnected.getAndSet(true)) return
+
+        GlobalScope.launch {
+            while (isConnected.get()) {
+                notifyListenersOfUpdate()
+                delay(2000)
+            }
+        }
 
         // First connect to the default seeds and ask them for other clients
         for (seed in defaultSeedAddresses) {
@@ -83,6 +93,7 @@ class Network: IMessageProcessor {
                 locatorHashes = BlockDb.instance.locatorHashes,
                 hashStop = ByteArray(32) {0}
             )
+            lastBlockReceived = ZonedDateTime.now()
             connection.sendMessage(getBlocksMessage)
         } else {
             connection.close()
@@ -138,6 +149,7 @@ class Network: IMessageProcessor {
 
         previousBlock?.nextBlockHash = newBlock.hash
         BlockDb.instance.addBlock(newBlock)
+        lastBlockReceived = ZonedDateTime.now()
         notifyListenersOfUpdate()
     }
 

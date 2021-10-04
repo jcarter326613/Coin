@@ -10,16 +10,27 @@ import javax.swing.*
 class NetworkView: JPanel(), Network.IUpdateListener {
     private val activeConnections = JList<NetworkAddress>()
     private val chainLength = JLabel()
+    private val chainLoading = JLabel()
 
     init {
         val layout = BorderLayout()
-        add(chainLength)
+        val statusPanel = JPanel()
+
         add(activeConnections)
-        layout.addLayoutComponent(chainLength, BorderLayout.NORTH)
+        add(statusPanel)
         layout.addLayoutComponent(activeConnections, BorderLayout.CENTER)
+        layout.addLayoutComponent(statusPanel, BorderLayout.EAST)
+
+        val statusLayout = BoxLayout(statusPanel, BoxLayout.Y_AXIS)
+        statusPanel.add(chainLength)
+        statusPanel.add(chainLoading)
+        statusLayout.addLayoutComponent("Chain Length", chainLength)
+        statusLayout.addLayoutComponent("Chain Loading", chainLoading)
+
         preferredSize = Dimension(300, 200)
 
         this.layout = layout
+        statusPanel.layout = statusLayout
     }
 
     fun updateScrollPane(network: Network) {
@@ -29,12 +40,13 @@ class NetworkView: JPanel(), Network.IUpdateListener {
         activeConnections.model = listModel
     }
 
-    fun updateChainStatistics() {
+    fun updateChainStatistics(network: Network) {
         chainLength.text = "Chain Length: ${BlockDb.instance.lastBlockHeight}"
+        chainLoading.text = if (network.loadingBlocks) "Loading" else ""
     }
 
     override fun networkUpdated(network: Network) {
         updateScrollPane(network)
-        updateChainStatistics()
+        updateChainStatistics(network)
     }
 }
