@@ -41,7 +41,7 @@ class NetworkView: JPanel(), Network.IUpdateListener {
     }
 
     fun updateChainStatistics(network: Network) {
-        chainLength.text = "Chain Length: ${BlockDb.instance.lastBlockHeight}"
+        chainLength.text = "Chain Length: ${network.lastBlockHeight}"
         chainLoading.text = if (network.loadingBlocks) "Loading" else ""
     }
 

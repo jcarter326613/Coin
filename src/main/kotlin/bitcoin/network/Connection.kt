@@ -18,6 +18,7 @@ import kotlin.random.Random
 
 class Connection(
     val addr: NetworkAddress,
+    lastBlockHeight: Int,
     private val messageProcessor: IMessageProcessor,
     private val disconnectHandler: ((c: Connection) -> Unit)
 ) {
@@ -60,7 +61,7 @@ class Connection(
                 outputStream = socket.getOutputStream()
 
                 startStreamReader()
-                sendVersionMessage()
+                sendVersionMessage(lastBlockHeight)
             } catch (e: Throwable) {
                 Log.error(e)
                 isClosed = true
@@ -248,7 +249,7 @@ class Connection(
         return MessageHeader.fromByteArray(header)
     }
 
-    private fun sendVersionMessage() {
+    private fun sendVersionMessage(lastBlockHeight: Int) {
         val message = VersionMessage(
             protocolVersion = protocolVersion,
             services = NetworkAddress.serviceFlagsNetwork,
@@ -257,7 +258,7 @@ class Connection(
             sourceAddress = NetworkAddress(convertAddressToByteArray("0.0.0.0"), 0, NetworkAddress.serviceFlagsNetwork),
             nonce = Random.nextLong(),
             userAgent = VariableString(""),
-            startHeight = BlockDb.instance.lastBlockHeight,
+            startHeight = lastBlockHeight,
             relay = true
         )
         sendMessage(message)

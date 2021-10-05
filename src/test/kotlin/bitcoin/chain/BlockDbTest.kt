@@ -7,7 +7,7 @@ import storage.IStorage
 class BlockDbTest {
     @Test
     fun locatorHash_Normal_Success() {
-        val blockDb = BlockDb.overrideDatabase(NullStorage())
+        val blockDb = BlockDb(NullStorage())
         val blockList = createRandomChain(1000, blockDb)
 
         val locatorHashes = blockDb.locatorHashes
@@ -21,39 +21,52 @@ class BlockDbTest {
 
     @Test
     fun addBlock_PreviousNotHead_Success() {
-        val blockDb = BlockDb.overrideDatabase(NullStorage())
+        val blockDb = BlockDb(NullStorage())
 
-        blockDb.addBlock(Block.fromMessage(BlockMessageTest.createRandomBlock()))
-        assert(!blockDb.addBlock(Block.fromMessage(BlockMessageTest.createRandomBlock())))
+        assert(blockDb.addBlock(Block(BlockMessageTest.createRandomBlock())))
+        assert(!blockDb.addBlock(Block(BlockMessageTest.createRandomBlock())))
     }
 
     @Test
     fun addBlock_WithRemoveAndReAdd_Success() {
-        val blockDb = BlockDb.overrideDatabase(NullStorage())
+        val blockDb = BlockDb(NullStorage())
         val blockList = createRandomChain(10, null)
 
         for (i in 0 until 10) {
-            blockDb.addBlock(blockList[i])
+            assert(blockDb.addBlock(blockList[i]))
         }
         blockDb.removeBlock(blockList[4])
         for (i in 4 until 10) {
-            blockDb.addBlock(blockList[i])
+            assert(blockDb.addBlock(blockList[i]))
         }
     }
 
     @Test
+    fun addBlock_WithRemoveAndAddNew_Success() {
+        val blockDb = BlockDb(NullStorage())
+        val block1 = Block(BlockMessageTest.createRandomBlock())
+        val block2 = Block(BlockMessageTest.createRandomBlock(previousHash = block1.hash))
+        val block3 = Block(BlockMessageTest.createRandomBlock(previousHash = block1.hash))
+
+        assert(blockDb.addBlock(block1))
+        assert(blockDb.addBlock(block2))
+        blockDb.removeBlock(block2)
+        assert(blockDb.addBlock(block3))
+    }
+
+    @Test
     fun addBlock_NewByteArrayAddress_Success() {
-        val blockDb = BlockDb.overrideDatabase(NullStorage())
+        val blockDb = BlockDb(NullStorage())
         val blockMessage1 = BlockMessageTest.createRandomBlock()
-        val block1 = Block.fromMessage(blockMessage1)
+        val block1 = Block(blockMessage1)
         val blockMessage1HashCopy = ByteArray(block1.hash.size)
         block1.hash.copyInto(blockMessage1HashCopy)
 
         val blockMessage2 = BlockMessageTest.createRandomBlock(previousHash = blockMessage1HashCopy)
-        val block2 = Block.fromMessage(blockMessage2)
+        val block2 = Block(blockMessage2)
 
-        blockDb.addBlock(block1)
-        blockDb.addBlock(block2)
+        assert(blockDb.addBlock(block1))
+        assert(blockDb.addBlock(block2))
 
         assert(blockDb.lastBlockHeight == 2)
     }
@@ -62,7 +75,7 @@ class BlockDbTest {
         val blockList = mutableListOf<Block>()
         var previousHash: ByteArray? = null
         for (i in 1..numBlocks) {
-            val newBlock = Block.fromMessage(BlockMessageTest.createRandomBlock(previousHash = previousHash))
+            val newBlock = Block(BlockMessageTest.createRandomBlock(previousHash = previousHash))
             previousHash = newBlock.hash
             blockList.add(newBlock)
             blockDb?.addBlock(newBlock)

@@ -3,6 +3,7 @@ package bitcoin.chain
 import storage.IStorage
 import storage.LocalStorage
 import java.lang.Integer.max
+import java.time.ZonedDateTime
 
 /**
  * Responsible for representing the full active block chain.  As the chain grows, new blocks are added using the
@@ -10,8 +11,10 @@ import java.lang.Integer.max
  * using the function removeBlock and then the new top should be added one at a time with addBlock in order of lower to
  * higher blocks.
  */
-class BlockDb private constructor(private val storageController: IStorage) {
+class BlockDb(private val storageController: IStorage) {
     var lastBlockHeight: Int = 0
+        private set
+    var lastBlockReceived = ZonedDateTime.now().minusYears(1)
         private set
 
     private var _locatorHashes: MutableList<ByteArray>? = null
@@ -43,15 +46,19 @@ class BlockDb private constructor(private val storageController: IStorage) {
     fun addBlock(block: Block): Boolean {
         synchronized(blockMapByHash) {
             // Check that the block can be added to the chain
-            if (blockMapByHash.isNotEmpty()) {
-                if (blockMapByHash[ByteArrayWrapper(block.previousBlockHash)] == null ||
-                    !inMemoryBlocks.last().hash.contentEquals(block.previousBlockHash)
-                ) {
-                    return false
-                }
+            if (inMemoryBlocks.lastOrNull()?.hash?.contentEquals(block.previousBlockHash) == false) {
+                return false
             }
 
             // Add the block to the chain
+            val previousLastBlock = inMemoryBlocks.lastOrNull()
+            if (previousLastBlock == null) {
+                block.height = 0
+            } else {
+                previousLastBlock.nextBlockHash = block.hash
+                block.height = previousLastBlock.height + 1
+            }
+
             blockMapByHash[ByteArrayWrapper(block.hash)] = block
             inMemoryBlocks.add(block)
             lastBlockHeight++
@@ -68,6 +75,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
             //storageController.insertData(block.toByteArray(), block.hash)
 
             _locatorHashes = null
+            lastBlockReceived = ZonedDateTime.now()
             return true
         }
     }
@@ -79,27 +87,26 @@ class BlockDb private constructor(private val storageController: IStorage) {
     fun removeBlock(block: Block) {
         synchronized(blockMapByHash) {
             val levelIndex = inMemoryBlocks.indexOf(block)
-            while (inMemoryBlocks.size > levelIndex) {
-                val toRemove = inMemoryBlocks.removeAt(levelIndex)
-                blockMapByHash.remove(ByteArrayWrapper(toRemove.hash))
-                lastBlockHeight--
-            }
+            if (levelIndex >= 0) {
+                // Null out the next hash of the previous block
+                if (levelIndex > 0) {
+                    inMemoryBlocks[levelIndex - 1].nextBlockHash = null
+                }
 
-            _locatorHashes = null
+                // Remove everything after this block in the chain and this block
+                while (inMemoryBlocks.size > levelIndex) {
+                    val toRemove = inMemoryBlocks.removeAt(levelIndex)
+                    blockMapByHash.remove(ByteArrayWrapper(toRemove.hash))
+                    lastBlockHeight--
+                }
+
+                _locatorHashes = null
+            }
         }
     }
 
     companion object {
-        var instance = BlockDb(LocalStorage())
-            private set
-
-        private const val maxMemorySize = 10 * 1024 * 1024  // 10 megabytes
-
-        fun overrideDatabase(storage: IStorage): BlockDb {
-            val instance = BlockDb(storage)
-            this.instance = instance
-            return instance
-        }
+        private const val maxMemorySize = 10 * 1024 * 1024
     }
 
     private class ByteArrayWrapper(val array: ByteArray) {

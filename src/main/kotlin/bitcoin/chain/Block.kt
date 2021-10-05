@@ -42,28 +42,11 @@ class Block(
             return hash
         }
 
-    private var _height: Int? = height
-    val height: Int
-        get() {
-            var height = _height
-            if (height == null) {
-                val previousBlock = BlockDb.instance.getBlock(message.previousBlockHash) ?: throw Exception("Could not retrieve previous block")
-                height = previousBlock.height + 1
-                _height = height
-                return height
-            }
-            return height
-        }
+    var height: Int = 0
 
     init {
         if (message.transactions.isEmpty()) {
             throw Exception("Invalid number of transactions in block")
-        }
-    }
-
-    companion object {
-        fun fromMessage(message: BlockMessage): Block {
-            return Block(message = message)
         }
     }
 }
