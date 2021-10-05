@@ -93,7 +93,7 @@ class BlockDb private constructor(private val storageController: IStorage) {
         var instance = BlockDb(LocalStorage())
             private set
 
-        private const val maxMemorySize = 10 * 1024 * 1024
+        private const val maxMemorySize = 10 * 1024 * 1024  // 10 megabytes
 
         fun overrideDatabase(storage: IStorage): BlockDb {
             val instance = BlockDb(storage)

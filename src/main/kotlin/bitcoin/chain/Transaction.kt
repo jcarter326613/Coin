@@ -1,7 +1,9 @@
 package bitcoin.chain
 
-class Transaction(
-    val version: Int,
+import bitcoin.messages.TxMessage
 
+class Transaction(
+    val message: TxMessage,
+    val sourceBlockHash: ByteArray
 ) {
 }
