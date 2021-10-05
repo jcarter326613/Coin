@@ -2,11 +2,14 @@ package bitcoin.network
 
 import bitcoin.chain.Block
 import bitcoin.chain.BlockDb
+import bitcoin.chain.IBlockDbProvider
 import bitcoin.messages.*
 import bitcoin.messages.components.NetworkAddress
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import storage.LocalStorage
+import storage.NullStorage
 import util.Log
 import java.time.ZonedDateTime
 import java.util.concurrent.atomic.AtomicBoolean
@@ -14,7 +17,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.floor
 import kotlin.random.Random
 
-class Network: IMessageProcessor {
+class Network(val blockDbProvider: IBlockDbProvider = object: IBlockDbProvider {
+    override fun createBlockDb(): BlockDb {
+        return BlockDb(LocalStorage())
+    }
+}): IMessageProcessor {
     val activeConnectionAddresses: List<NetworkAddress>
         get() {
             val retList = mutableListOf<NetworkAddress>()
@@ -27,7 +34,8 @@ class Network: IMessageProcessor {
         }
     val updateListeners = mutableListOf<IUpdateListener>()
     val loadingBlocks: Boolean
-        get() = ZonedDateTime.now().minusSeconds(5).isBefore(lastBlockReceived)
+        get() = ZonedDateTime.now().minusSeconds(5).isBefore(mainChainDb.lastBlockReceived)
+    val lastBlockHeight get() = mainChainDb.lastBlockHeight
 
     private val port: Short = 18333                                                                 //https://developer.bitcoin.org/reference/p2p_networking.html#constants-and-defaults
     private val defaultSeedAddresses = listOf(
@@ -40,7 +48,8 @@ class Network: IMessageProcessor {
     private val activePeers = mutableMapOf<NetworkAddress, ZonedDateTime>()
     private var isConnected = AtomicBoolean(false)
     private val numConnectionsBeingCreated = AtomicInteger(0)
-    private var lastBlockReceived = ZonedDateTime.now().minusMinutes(1)
+    private val mainChainDb = blockDbProvider.createBlockDb()
+    private val secondaryChains = mutableListOf<BlockDb>()
 
     fun addUpdateListener(newListener: IUpdateListener) {
         updateListeners.add(newListener)
@@ -90,10 +99,9 @@ class Network: IMessageProcessor {
             // Request any new blocks since the most recent block in the database
             val getBlocksMessage = GetBlocksMessage(
                 version = Connection.minimumProtocolVersion,
-                locatorHashes = BlockDb.instance.locatorHashes,
+                locatorHashes = mainChainDb.locatorHashes,
                 hashStop = ByteArray(32) {0}
             )
-            lastBlockReceived = ZonedDateTime.now()
             connection.sendMessage(getBlocksMessage)
         } else {
             connection.close()
@@ -112,10 +120,9 @@ class Network: IMessageProcessor {
     }
 
     override fun processIncomingMessageInv(payload: InvMessage, connection: Connection) {
-        val blockDb = BlockDb.instance
         val listToRequest = mutableListOf<ByteArray>()
         for (blockHash in payload.blockHashes) {
-            if (blockDb.getBlock(blockHash) == null) {
+            if (mainChainDb.getBlock(blockHash) == null) {
                 listToRequest.add(blockHash)
             }
         }
@@ -133,24 +140,12 @@ class Network: IMessageProcessor {
     }
 
     override fun processIncomingMessageBlock(payload: BlockMessage, connection: Connection) {
-        val db = BlockDb.instance
-        val previousBlock = db.getBlock(payload.previousBlockHash)
-        if (db.lastBlockHeight != 0 && previousBlock == null) {
-            return
+        val newBlock = Block(payload)
+        if (mainChainDb.addBlock(newBlock)) {
+            notifyListenersOfUpdate()
+        } else {
+            addToSecondaryChain(newBlock)
         }
-        val newBlock = Block.fromMessage(payload)
-        if (previousBlock?.nextBlockHash != null) {
-            if (previousBlock.nextBlockHash.contentEquals(newBlock.hash)) {
-                return
-            } else {
-                throw Exception("Next block is already set.  Need to implement branch length checking")
-            }
-        }
-
-        previousBlock?.nextBlockHash = newBlock.hash
-        BlockDb.instance.addBlock(newBlock)
-        lastBlockReceived = ZonedDateTime.now()
-        notifyListenersOfUpdate()
     }
 
     private fun removeActiveConnection(connectionToRemove: Connection) {
@@ -226,7 +221,7 @@ class Network: IMessageProcessor {
                             }
                         }
                         if (!alreadyConnected) {
-                            activeConnections.add(Connection(setPeer, this) {
+                            activeConnections.add(Connection(setPeer, mainChainDb.lastBlockHeight, this) {
                                 removeActiveConnection(it)
                             })
                         }
@@ -236,6 +231,25 @@ class Network: IMessageProcessor {
             }
         } finally {
             numConnectionsBeingCreated.decrementAndGet()
+        }
+    }
+
+    private fun addToSecondaryChain(block: Block) {
+        synchronized(secondaryChains) {
+            for (chain in secondaryChains) {
+                if (chain.addBlock(block)) {
+                    return
+                }
+            }
+
+            //We didn't have a chain with the previous block.  If the main branch has it, create a secondary chain
+            //otherwise the main branch may be building to this point, or it's just a garbage block
+            val previousBlock = mainChainDb.getBlock(block.previousBlockHash)
+            if (previousBlock != null) {
+                val newSecondaryChain = BlockDb(NullStorage())
+                newSecondaryChain.addBlock(block)
+                secondaryChains.add(newSecondaryChain)
+            }
         }
     }
 
