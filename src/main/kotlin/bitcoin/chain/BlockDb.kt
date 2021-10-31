@@ -11,7 +11,7 @@ import java.time.ZonedDateTime
  * using the function removeBlock and then the new top should be added one at a time with addBlock in order of lower to
  * higher blocks.
  */
-class BlockDb(private val storageController: IStorage) {
+class BlockDb(private val storageController: IStorage, private val transactionDb: TransactionDb) {
     var lastBlockHeight: Int = 0
         private set
     var lastBlockReceived = ZonedDateTime.now().minusYears(1)
@@ -72,7 +72,21 @@ class BlockDb(private val storageController: IStorage) {
             }
 
             // Add the block to storage
-            //storageController.insertData(block.toByteArray(), block.hash)
+            storageController.insertData(block.toByteArray(), block.hash)
+
+            // Remove used transactions from the database
+            for (transaction in block.message.transactions) {
+                for (input in transaction.inputs) {
+                    transactionDb.removeTransaction(input.outPoint.hash)
+                }
+            }
+
+            // Add the new transactions to the database
+            for (transaction in block.message.transactions) {
+                for (output in transaction.outputs) {
+                    transactionDb.addTransaction(output.)
+                }
+            }
 
             _locatorHashes = null
             lastBlockReceived = ZonedDateTime.now()
