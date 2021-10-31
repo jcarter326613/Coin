@@ -1,5 +1,6 @@
 package bitcoin.chain
 
+import bitcoin.messages.BlockMessage
 import storage.IStorage
 import storage.LocalStorage
 import java.lang.Integer.max
@@ -58,34 +59,21 @@ class BlockDb(private val storageController: IStorage, private val transactionDb
                 previousLastBlock.nextBlockHash = block.hash
                 block.height = previousLastBlock.height + 1
             }
-
-            blockMapByHash[ByteArrayWrapper(block.hash)] = block
-            inMemoryBlocks.add(block)
             lastBlockHeight++
 
-            // Update the memory usage and age off the old blocks
-            memorySizeUsed += block.memorySize
-            while (memorySizeUsed > maxMemorySize) {
-                val blockToRemove = inMemoryBlocks.removeFirst()
-                memorySizeUsed -= blockToRemove.memorySize
-                blockMapByHash.remove(ByteArrayWrapper(blockToRemove.hash))
-            }
+            addBlockToMemoryCache(block)
 
             // Add the block to storage
             storageController.insertData(block.toByteArray(), block.hash)
 
             // Remove used transactions from the database
             for (transaction in block.message.transactions) {
-                for (input in transaction.inputs) {
-                    transactionDb.removeTransaction(input.outPoint.hash)
-                }
+                transactionDb.removeSources(transaction)
             }
 
             // Add the new transactions to the database
             for (transaction in block.message.transactions) {
-                for (output in transaction.outputs) {
-                    transactionDb.addTransaction(output.)
-                }
+                transactionDb.addOutputs(transaction)
             }
 
             _locatorHashes = null
@@ -95,7 +83,15 @@ class BlockDb(private val storageController: IStorage, private val transactionDb
     }
 
     fun getBlock(hash: ByteArray): Block? {
-        return blockMapByHash[ByteArrayWrapper(hash)]
+        val cachedBlock = blockMapByHash[ByteArrayWrapper(hash)]
+        if (cachedBlock == null) {
+            val blockData = storageController.retrieveData(hash)
+            val blockMessage = BlockMessage.fromByteArray(blockData)
+            val block = Block(blockMessage, nextBlockHash, height, hash)
+
+            addBlockToMemoryCache(block)
+        }
+        return cachedBlock
     }
 
     fun removeBlock(block: Block) {
@@ -116,6 +112,19 @@ class BlockDb(private val storageController: IStorage, private val transactionDb
 
                 _locatorHashes = null
             }
+        }
+    }
+
+    private fun addBlockToMemoryCache(block: Block) {
+        blockMapByHash[ByteArrayWrapper(block.hash)] = block
+        inMemoryBlocks.add(block)
+
+        // Update the memory usage and age off the old blocks
+        memorySizeUsed += block.memorySize
+        while (memorySizeUsed > maxMemorySize) {
+            val blockToRemove = inMemoryBlocks.removeFirst()
+            memorySizeUsed -= blockToRemove.memorySize
+            blockMapByHash.remove(ByteArrayWrapper(blockToRemove.hash))
         }
     }
 
