@@ -85,9 +85,8 @@ class BlockDb(private val storageController: IStorage, private val transactionDb
     fun getBlock(hash: ByteArray): Block? {
         val cachedBlock = blockMapByHash[ByteArrayWrapper(hash)]
         if (cachedBlock == null) {
-            val blockData = storageController.retrieveData(hash)
-            val blockMessage = BlockMessage.fromByteArray(blockData)
-            val block = Block(blockMessage, nextBlockHash, height, hash)
+            val blockData = storageController.retrieveData(hash) ?: return null
+            val block = Block.fromByteArray(blockData)
 
             addBlockToMemoryCache(block)
         }

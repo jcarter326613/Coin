@@ -14,23 +14,26 @@ class BlockMessage(
 ) {
     fun toByteArray(): ByteArray {
         val array = ByteArray(calculateMessageSize())
-        var currentOffset = 0
+        intoByteArray(array, 0)
+        return array
+    }
 
-        currentOffset = ByteManipulation.writeIntToArray(version, array, currentOffset)
-        previousBlockHash.copyInto(array, currentOffset)
+    fun intoByteArray(dest: ByteArray, destIndex: Int): Int {
+        var currentOffset = ByteManipulation.writeIntToArray(version, dest, destIndex)
+        previousBlockHash.copyInto(dest, currentOffset)
         currentOffset += previousBlockHash.size
-        merkleRootHash.copyInto(array, currentOffset)
+        merkleRootHash.copyInto(dest, currentOffset)
         currentOffset += merkleRootHash.size
-        currentOffset = ByteManipulation.writeIntToArray(timestamp, array, currentOffset)
-        currentOffset = ByteManipulation.writeIntToArray(difficultyTarget, array, currentOffset)
-        currentOffset = ByteManipulation.writeIntToArray(nonce, array, currentOffset)
-        currentOffset = VariableInt(transactions.size.toLong()).intoByteArray(array, currentOffset)
+        currentOffset = ByteManipulation.writeIntToArray(timestamp, dest, currentOffset)
+        currentOffset = ByteManipulation.writeIntToArray(difficultyTarget, dest, currentOffset)
+        currentOffset = ByteManipulation.writeIntToArray(nonce, dest, currentOffset)
+        currentOffset = VariableInt(transactions.size.toLong()).intoByteArray(dest, currentOffset)
 
         for (transaction in transactions) {
-            currentOffset = transaction.intoByteArray(array, currentOffset)
+            currentOffset = transaction.intoByteArray(dest, currentOffset)
         }
 
-        return array
+        return currentOffset
     }
 
     fun toBlockHeaderMessage(): BlockHeaderMessage {
@@ -56,7 +59,11 @@ class BlockMessage(
 
     companion object {
         fun fromByteArray(buffer: ByteArray): BlockMessage {
-            val version = ByteManipulation.readIntFromArray(buffer, 0)
+            return fromByteArrayWithIndex(buffer, 0).value
+        }
+
+        fun fromByteArrayWithIndex(buffer: ByteArray, startIndex: Int): BlockIndexPair {
+            val version = ByteManipulation.readIntFromArray(buffer, startIndex)
             val previousBlockHash = buffer.slice(version.nextIndex until (version.nextIndex + 32)).toByteArray()
             val merkleRootHash = buffer.slice((version.nextIndex + 32) until (version.nextIndex + 32 * 2)).toByteArray()
 
@@ -73,15 +80,23 @@ class BlockMessage(
                 currentOffset = newTransaction.nextIndex
             }
 
-            return BlockMessage(
-                version = version.value,
-                previousBlockHash = previousBlockHash,
-                merkleRootHash = merkleRootHash,
-                timestamp = timestamp.value,
-                difficultyTarget = difficultyTarget.value,
-                nonce = nonce.value,
-                transactions = transactions
+            return BlockIndexPair(
+                BlockMessage(
+                    version = version.value,
+                    previousBlockHash = previousBlockHash,
+                    merkleRootHash = merkleRootHash,
+                    timestamp = timestamp.value,
+                    difficultyTarget = difficultyTarget.value,
+                    nonce = nonce.value,
+                    transactions = transactions
+                ),
+                currentOffset
             )
         }
     }
+
+    data class BlockIndexPair (
+        val value: BlockMessage,
+        val nextIndex: Int
+    )
 }

@@ -3,14 +3,14 @@ package bitcoin.chain
 import bitcoin.messages.BlockHeaderMessage
 import bitcoin.messages.BlockMessage
 import bitcoin.messages.TxMessage
+import bitcoin.messages.components.VariableInt
 import kotlinx.coroutines.processNextEventInCurrentThread
 import java.security.MessageDigest
 
 class Block(
     val message: BlockMessage,
     var nextBlockHash: ByteArray? = null,
-    height: Int? = null,
-    hash: ByteArray? = null,
+    height: Int? = null
 ) {
     private var _memorySize: Int? = null
     val memorySize: Int
@@ -42,11 +42,49 @@ class Block(
             return hash
         }
 
-    var height: Int = 0
+    var height: Int = height ?: 0
 
     init {
         if (message.transactions.isEmpty()) {
             throw Exception("Invalid number of transactions in block")
+        }
+    }
+
+    fun toByteArray(): ByteArray {
+        val array = ByteArray(calculateByteArraySize())
+        var currentOffset = message.intoByteArray(array, 0)
+        val nextBlockHash = nextBlockHash
+        if (nextBlockHash == null) {
+            array[currentOffset] = 0
+            currentOffset++
+        } else {
+            array[currentOffset] = 1
+            nextBlockHash.copyInto(array, currentOffset + 1)
+            currentOffset += 1 + nextBlockHash.size
+        }
+        val heightInt = VariableInt(height.toLong())
+        heightInt.intoByteArray(array, currentOffset)
+
+        return array
+    }
+
+    fun calculateByteArraySize(): Int = message.calculateMessageSize() + 32 + 4
+
+    companion object {
+        fun fromByteArray(array: ByteArray): Block {
+            val block = BlockMessage.fromByteArrayWithIndex(array, 0)
+            val nextHashIndex: Int
+            val nextHash: ByteArray?
+            if (array[block.nextIndex] == 1.toByte()) {
+                nextHash = array.slice((block.nextIndex + 1) until (block.nextIndex + 1 + 32)).toByteArray()
+                nextHashIndex = block.nextIndex + 1 + 32
+            } else {
+                nextHash = null
+                nextHashIndex = block.nextIndex + 1
+            }
+            val height = VariableInt.fromByteArray(array, nextHashIndex)
+
+            return Block(block.value, nextHash, height.value.value.toInt())
         }
     }
 }
